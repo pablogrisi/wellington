@@ -5,40 +5,31 @@
       "is_bot": false,
       "cards": [
         {
-          "rank": "8",
-          "suit": "D"
-        },
-        {
           "rank": "3",
-          "suit": "D"
+          "suit": "C"
         },
+        null,
         {
           "rank": "A",
           "suit": "D"
         },
-        {
-          "rank": "7",
-          "suit": "C"
-        }
+        null
       ],
       "known_slots": [
-        2,
-        3
+        0,
+        2
       ],
-      "locked": false
+      "locked": true
     },
     {
       "name": "Bot 1",
       "is_bot": true,
       "cards": [
         {
-          "rank": "9",
-          "suit": "D"
+          "rank": "4",
+          "suit": "H"
         },
-        {
-          "rank": "8",
-          "suit": "C"
-        },
+        null,
         {
           "rank": "5",
           "suit": "D"
@@ -63,8 +54,8 @@
           "suit": "C"
         },
         {
-          "rank": "J",
-          "suit": "S"
+          "rank": "2",
+          "suit": "C"
         },
         {
           "rank": "5",
@@ -86,21 +77,15 @@
       "is_bot": true,
       "cards": [
         {
-          "rank": "4",
-          "suit": "H"
+          "rank": "K",
+          "suit": "D"
         },
+        null,
         {
-          "rank": "4",
-          "suit": "C"
+          "rank": "7",
+          "suit": "D"
         },
-        {
-          "rank": "Q",
-          "suit": "C"
-        },
-        {
-          "rank": "Q",
-          "suit": "H"
-        }
+        null
       ],
       "known_slots": [
         2,
@@ -209,9 +194,71 @@
     {
       "rank": "JK",
       "suit": null
+    }
+  ],
+  "discard_pile": [
+    {
+      "rank": "2",
+      "suit": "D"
+    },
+    {
+      "rank": "3",
+      "suit": "D"
+    },
+    {
+      "rank": "3",
+      "suit": "S"
+    },
+    {
+      "rank": "9",
+      "suit": "D"
+    },
+    {
+      "rank": "J",
+      "suit": "S"
+    },
+    {
+      "rank": "Q",
+      "suit": "C"
+    },
+    {
+      "rank": "Q",
+      "suit": "H"
+    },
+    {
+      "rank": "8",
+      "suit": "D"
+    },
+    {
+      "rank": "8",
+      "suit": "C"
+    },
+    {
+      "rank": "8",
+      "suit": "H"
     },
     {
       "rank": "10",
+      "suit": "H"
+    },
+    {
+      "rank": "7",
+      "suit": "S"
+    },
+    {
+      "rank": "7",
+      "suit": "C"
+    },
+    {
+      "rank": "4",
+      "suit": "C"
+    },
+    {
+      "rank": "4",
+      "suit": "S"
+    },
+    {
+      "rank": "6",
       "suit": "D"
     },
     {
@@ -219,56 +266,14 @@
       "suit": "H"
     },
     {
-      "rank": "6",
-      "suit": "D"
-    },
-    {
-      "rank": "4",
-      "suit": "S"
-    },
-    {
-      "rank": "7",
-      "suit": "S"
-    },
-    {
       "rank": "10",
-      "suit": "H"
-    },
-    {
-      "rank": "8",
-      "suit": "H"
-    },
-    {
-      "rank": "3",
-      "suit": "C"
-    },
-    {
-      "rank": "7",
-      "suit": "D"
-    },
-    {
-      "rank": "2",
-      "suit": "C"
-    },
-    {
-      "rank": "K",
-      "suit": "D"
-    },
-    {
-      "rank": "3",
-      "suit": "S"
-    }
-  ],
-  "discard_pile": [
-    {
-      "rank": "2",
       "suit": "D"
     }
   ],
-  "current_player": 0,
+  "current_player": 3,
   "drawn_card": null,
-  "wellington_caller": null,
-  "game_over": false,
+  "wellington_caller": 0,
+  "game_over": true,
   "pending_ability": null,
   "pending_ability8_preview": null,
   "pending_human_cut": false,
@@ -280,6 +285,54 @@
   "bot_visual": {},
   "human_known_other": [],
   "log": [
-    "Nova partida iniciada."
+    "Nova partida iniciada.",
+    "Voce comprou 3S.",
+    "Voce trocou slot 1 por 3S e descartou 3D.",
+    "Janela de Wellington aberta por 3s.",
+    "Voce cortou com sucesso usando 3S (slot 1).",
+    "Bot 1 comprou uma carta.",
+    "Bot 1 descartou a carta da mesa no slot 0.",
+    "Voce passou no corte.",
+    "Bot 2 comprou uma carta.",
+    "Bot 2 descartou a carta da mesa no slot 1.",
+    "Voce passou no corte.",
+    "Bot 3 comprou uma carta.",
+    "Bot 3 descartou a carta da mesa no slot 2.",
+    "Bot 3 cortou com QH (slot 3).",
+    "Voce passou no corte.",
+    "Voce comprou 3C.",
+    "Voce trocou slot 0 por 3C e descartou 8D.",
+    "Bot 1 cortou com 8C (slot 1).",
+    "Habilidade da carta 8 pendente para voce.",
+    "Habilidade 8: cartas reveladas para decisao (seu slot 3 e jogador 3 slot 1).",
+    "Habilidade 8: voce viu 7C (seu slot 3) e 4C do jogador 3 slot 1.",
+    "Habilidade 8: troca aplicada.",
+    "Janela de Wellington aberta por 3s.",
+    "Voce passou no corte.",
+    "Bot 1 comprou uma carta.",
+    "Bot 1 descartou a carta comprada.",
+    "Habilidade 8: troca nao aplicada.",
+    "Voce passou no corte.",
+    "Bot 2 comprou uma carta.",
+    "Bot 2 descartou a carta comprada.",
+    "Voce passou no corte.",
+    "Bot 3 comprou uma carta.",
+    "Bot 3 descartou a carta comprada.",
+    "Bot 3 cortou com 7C (slot 1).",
+    "Habilidade 7: troca cega realizada entre slot 0 e jogador 1 slot 0.",
+    "Voce passou no corte.",
+    "Voce comprou 4S.",
+    "Voce trocou slot 3 por 4S e descartou 4C.",
+    "Janela de Wellington aberta por 3s.",
+    "Voce cortou com sucesso usando 4S (slot 3).",
+    "Voce chamou Wellington e travou suas cartas.",
+    "Bot 1 comprou uma carta.",
+    "Bot 1 descartou a carta comprada.",
+    "Bot 1 usou habilidade 6.",
+    "Bot 2 comprou uma carta.",
+    "Bot 2 descartou a carta comprada.",
+    "Bot 3 comprou uma carta.",
+    "Bot 3 descartou a carta comprada.",
+    "Partida encerrada por Wellington. Cartas reveladas."
   ]
 }

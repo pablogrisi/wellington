@@ -53,7 +53,7 @@ function toastError(err) {
   alert(err.message || String(err));
 }
 
-async function action(path, payload = null) {
+async function action(path, payload = null, options = {}) {
   try {
     state = await request(path, {
       method: "POST",
@@ -61,6 +61,7 @@ async function action(path, payload = null) {
     });
     render();
   } catch (err) {
+    if (options?.suppressError?.(err)) return;
     toastError(err);
   }
 }
@@ -108,7 +109,9 @@ function scheduleCutAutoPass() {
   if (state.current_player === 0 && state.human_cut_available_until_draw) return;
   const delay = Number(state.bot_delay_ms || 3000);
   cutAutoPassTimer = setTimeout(() => {
-    action("/api/action/skip-cut");
+    action("/api/action/skip-cut", null, {
+      suppressError: (err) => String(err?.message || "").includes("Nao ha corte pendente."),
+    });
   }, delay);
 }
 
@@ -120,7 +123,10 @@ function scheduleWellingtonWindowAutoPass() {
   if (!state || state.paused || !state.pending_human_wellington_window) return;
   const delay = Number(state.bot_delay_ms || 3000);
   wellingtonWindowTimer = setTimeout(() => {
-    action("/api/action/pass-wellington-window");
+    action("/api/action/pass-wellington-window", null, {
+      suppressError: (err) =>
+        String(err?.message || "").includes("Nao ha janela de Wellington pendente."),
+    });
   }, delay);
 }
 
