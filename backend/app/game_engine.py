@@ -62,6 +62,8 @@ class WellingtonGame:
         self.pending_ability8_preview: Optional[Dict[str, Any]] = None
         self.pending_human_cut: bool = False
         self.pending_human_cut_other_transfer: Optional[Dict[str, Any]] = None
+        self.pending_discard_resolution: Optional[Dict[str, Any]] = None
+        self.pending_bot_cut: bool = False
         self.human_cut_available_until_draw: bool = False
         self.pending_human_wellington_window: bool = False
         self.paused: bool = False
@@ -97,6 +99,8 @@ class WellingtonGame:
         self.pending_ability8_preview = None
         self.pending_human_cut = False
         self.pending_human_cut_other_transfer = None
+        self.pending_discard_resolution = None
+        self.pending_bot_cut = False
         self.human_cut_available_until_draw = False
         self.pending_human_wellington_window = False
         self.paused = False
@@ -128,6 +132,8 @@ class WellingtonGame:
             "pending_ability8_preview": self.pending_ability8_preview,
             "pending_human_cut": self.pending_human_cut,
             "pending_human_cut_other_transfer": self.pending_human_cut_other_transfer,
+            "pending_discard_resolution": self.pending_discard_resolution,
+            "pending_bot_cut": self.pending_bot_cut,
             "human_cut_available_until_draw": self.human_cut_available_until_draw,
             "pending_human_wellington_window": self.pending_human_wellington_window,
             "paused": self.paused,
@@ -163,6 +169,8 @@ class WellingtonGame:
         self.pending_ability8_preview = data.get("pending_ability8_preview")
         self.pending_human_cut = bool(data.get("pending_human_cut", False))
         self.pending_human_cut_other_transfer = data.get("pending_human_cut_other_transfer")
+        self.pending_discard_resolution = data.get("pending_discard_resolution")
+        self.pending_bot_cut = bool(data.get("pending_bot_cut", False))
         self.human_cut_available_until_draw = bool(data.get("human_cut_available_until_draw", False))
         self.pending_human_wellington_window = bool(data.get("pending_human_wellington_window", False))
         self.paused = bool(data.get("paused", False))
@@ -204,6 +212,14 @@ class WellingtonGame:
         while not self.game_over:
             if self.paused:
                 return
+            if self.pending_human_cut_other_transfer is not None:
+                return
+            if self.pending_bot_cut:
+                if self.pending_discard_resolution is not None:
+                    self._resolve_bot_cuts(int(self.pending_discard_resolution["player"]))
+                self.pending_bot_cut = False
+                self._process_pending_discard_flow()
+                continue
             if (
                 self.pending_human_cut
                 or self.pending_human_cut_other_transfer is not None
@@ -216,6 +232,10 @@ class WellingtonGame:
 
     def can_bot_step(self) -> bool:
         self._sanitize_human_cut_state()
+        if self.pending_human_cut_other_transfer is not None:
+            return False
+        if self.pending_bot_cut:
+            return not self.game_over and not self.paused
         return (
             not self.game_over
             and not self.paused
@@ -228,6 +248,12 @@ class WellingtonGame:
     def bot_step(self) -> bool:
         if not self.can_bot_step():
             return False
+        if self.pending_bot_cut:
+            if self.pending_discard_resolution is not None:
+                self._resolve_bot_cuts(int(self.pending_discard_resolution["player"]))
+            self.pending_bot_cut = False
+            self._process_pending_discard_flow()
+            return True
         self._bot_turn(self.current_player)
         return True
 
@@ -334,6 +360,9 @@ class WellingtonGame:
                 return
             self.pending_human_cut = False
             self._log("Voce passou no corte.")
+            if self.pending_discard_resolution is not None:
+                self._process_pending_discard_flow()
+                return
             if self.pending_ability is not None:
                 return
             if self.pending_human_wellington_window:
@@ -342,6 +371,9 @@ class WellingtonGame:
             return
         self.pending_human_cut = False
         self._log("Voce passou no corte.")
+        if self.pending_discard_resolution is not None:
+            self._process_pending_discard_flow()
+            return
         self._finish_turn_after_play(player_idx=self.current_player)
 
     def action_cut_self(self, slot: int) -> None:
@@ -373,11 +405,17 @@ class WellingtonGame:
 
         self.pending_human_cut = False
         if self.current_player == 0 and self.drawn_card is None:
+            if self.pending_discard_resolution is not None:
+                self._process_pending_discard_flow()
+                return
             if self.pending_ability is not None:
                 return
             if self.pending_human_wellington_window:
                 return
             self._advance_turn()
+            return
+        if self.pending_discard_resolution is not None:
+            self._process_pending_discard_flow()
             return
         self._finish_turn_after_play(player_idx=self.current_player)
 
@@ -543,6 +581,7 @@ class WellingtonGame:
             "drawn_card": human_drawn_label,
             "pending_human_cut": self.pending_human_cut,
             "pending_human_cut_other_transfer": self.pending_human_cut_other_transfer,
+            "pending_bot_cut": self.pending_bot_cut,
             "human_cut_available_until_draw": self.human_cut_available_until_draw,
             "pending_human_wellington_window": self.pending_human_wellington_window,
             "paused": self.paused,
@@ -552,6 +591,7 @@ class WellingtonGame:
             "pending_bot_turn": self.pending_bot_turn,
             "can_bot_step": self.can_bot_step(),
             "bot_delay_ms": 3000,
+            "bot_cut_delay_ms": 2500,
             "players": players_payload,
             "scores": self._scores_if_over(),
             "winner_ids": self._winner_ids_if_over(),
@@ -613,8 +653,57 @@ class WellingtonGame:
         self.draw_pile.extend(recyclable)
         self.discard_pile = [top]
 
+    def _has_bot_cut_candidates(self, discarder_idx: int) -> bool:
+        top = self._top_discard()
+        if top is None:
+            return False
+        order = [discarder_idx] + [
+            (discarder_idx + offset) % len(self.players)
+            for offset in range(1, len(self.players))
+        ]
+        for idx in order:
+            if idx == 0:
+                continue
+            p = self.players[idx]
+            if p.locked:
+                continue
+            matching_known = [
+                s for s, c in enumerate(p.cards)
+                if c is not None and c.rank == top.rank and s in p.known_slots
+            ]
+            if matching_known:
+                return True
+        return False
+
+    def _process_pending_discard_flow(self) -> None:
+        if self.pending_discard_resolution is None:
+            return
+        if self.pending_bot_cut:
+            return
+        if self.pending_human_cut or self.pending_human_cut_other_transfer is not None:
+            return
+        if self.pending_ability is not None:
+            return
+
+        ctx = self.pending_discard_resolution
+        self.pending_discard_resolution = None
+        player_idx = int(ctx["player"])
+        discarded_rank = str(ctx["rank"])
+
+        if discarded_rank in {"5", "6", "7", "8"} and not self.players[player_idx].locked:
+            if player_idx == 0:
+                self.pending_ability = {"player": 0, "rank": discarded_rank}
+                self._log(f"Habilidade da carta {discarded_rank} pendente para voce.")
+                return
+            self._resolve_bot_ability(player_idx, discarded_rank)
+
+        self._finish_turn_after_play(player_idx=player_idx)
+
     def _on_discard(self, player_idx: int, card: Card) -> None:
-        self._resolve_bot_cuts(player_idx)
+        self.pending_discard_resolution = {
+            "player": player_idx,
+            "rank": card.rank,
+        }
 
         has_human_cut_opportunity = self._check_human_cut_opportunity(player_idx)
         if has_human_cut_opportunity:
@@ -622,28 +711,14 @@ class WellingtonGame:
             # Se outro jogador descartou, o humano pode cortar ate comprar.
             # Se foi o proprio descarte do humano, resolve corte e segue o fluxo da vez.
             self.human_cut_available_until_draw = player_idx != 0
+        else:
+            self.pending_human_cut = False
 
-        if card.rank in {"5", "6", "7", "8"} and not self.players[player_idx].locked:
-            if player_idx == 0:
-                self.pending_ability = {"player": 0, "rank": card.rank}
-                self._log(f"Habilidade da carta {card.rank} pendente para voce.")
-                return
-            self._resolve_bot_ability(player_idx, card.rank)
-
-        if has_human_cut_opportunity and player_idx == 0:
-            if (
-                self.wellington_caller is None
-                and not self.players[0].locked
-                and not self.pending_human_wellington_window
-            ):
-                self.pending_human_wellington_window = True
-                self._log("Janela de Wellington aberta por 3s.")
+        self.pending_bot_cut = self._has_bot_cut_candidates(player_idx)
+        if self.pending_bot_cut:
             return
 
-        if has_human_cut_opportunity and player_idx != 0:
-            return
-
-        self._finish_turn_after_play(player_idx=player_idx)
+        self._process_pending_discard_flow()
 
     def _advance_turn(self) -> None:
         next_idx = (self.current_player + 1) % len(self.players)
@@ -668,6 +743,8 @@ class WellingtonGame:
         self.drawn_card = None
         self.pending_human_cut = False
         self.pending_human_cut_other_transfer = None
+        self.pending_discard_resolution = None
+        self.pending_bot_cut = False
         self.human_cut_available_until_draw = False
         self.pending_ability = None
         self.pending_ability8_preview = None

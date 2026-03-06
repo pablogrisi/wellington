@@ -99,9 +99,16 @@ function scheduleBotStep() {
     botStepTimer = null;
   }
   if (!state || state.paused || !state.can_bot_step) return;
-  // Quando entra a vez do bot, ele compra imediatamente.
-  // A espera de 3s fica apenas entre compra e resolucao da jogada.
-  const delay = state.pending_bot_turn ? Number(state.bot_delay_ms || 3000) : 0;
+  // Ritmo:
+  // - corte de bot apos descarte: 2.5s
+  // - entrada do turno do bot para comprar: imediato
+  // - resolucao da jogada do bot apos comprar: 3s
+  let delay = 0;
+  if (state.pending_bot_cut) {
+    delay = Number(state.bot_cut_delay_ms || 2500);
+  } else if (state.pending_bot_turn) {
+    delay = Number(state.bot_delay_ms || 3000);
+  }
   botStepTimer = setTimeout(() => {
     action("/api/bot-step");
   }, delay);
@@ -676,6 +683,30 @@ function renderControls() {
   base.appendChild(makeBtn("Chamar Wellington", () => action("/api/action/call-wellington"), !state.actions.can_call_wellington, "danger"));
   controlsEl.appendChild(base);
 
+  if (state.actions?.can_send_cut_other_card) {
+    const row = document.createElement("div");
+    row.className = "control-row";
+    row.appendChild(makeText("Voce descartou pela carta de alguem. Escolha uma carta sua para enviar para ele."));
+    const sendSlots = state.actions?.send_cut_other_slots || [];
+    sendSlots.forEach((slot) => {
+      row.appendChild(
+        makeBtn(
+          `Enviar meu slot ${slot}`,
+          () =>
+            action("/api/action/cut-other", {
+              target_player: -1,
+              target_slot: -1,
+              give_slot: slot,
+            }),
+          false,
+          "primary"
+        )
+      );
+    });
+    controlsEl.appendChild(row);
+    return;
+  }
+
   if (state.paused) {
     const pausedRow = document.createElement("div");
     pausedRow.className = "control-row";
@@ -745,29 +776,6 @@ function renderControls() {
       );
       controlsEl.appendChild(row);
     });
-  }
-
-  if (state.actions?.can_send_cut_other_card) {
-    const row = document.createElement("div");
-    row.className = "control-row";
-    row.appendChild(makeText("Corte confirmado. Clique em uma carta sua para enviar ao jogador alvo:"));
-    const sendSlots = state.actions?.send_cut_other_slots || [];
-    sendSlots.forEach((slot) => {
-      row.appendChild(
-        makeBtn(
-          `Enviar meu slot ${slot}`,
-          () =>
-            action("/api/action/cut-other", {
-              target_player: -1,
-              target_slot: -1,
-              give_slot: slot,
-            }),
-          false,
-          "primary"
-        )
-      );
-    });
-    controlsEl.appendChild(row);
   }
 
   if (state.pending_ability) {
