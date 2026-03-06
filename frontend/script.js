@@ -10,6 +10,7 @@ let showWellingtonFlash = false;
 let cutFlashTimer = null;
 let showCutFlash = false;
 let cutFlashText = "CORTE";
+let submittingPlayerName = false;
 const uiState = {
   ability7Selection: {
     ownSlot: null,
@@ -31,6 +32,11 @@ const pauseBtn = document.getElementById("pause-btn");
 const resumeBtn = document.getElementById("resume-btn");
 const newGameBtn = document.getElementById("new-game-btn");
 const undoBtn = document.getElementById("undo-btn");
+const playerGateEl = document.getElementById("player-gate");
+const playerGateFormEl = document.getElementById("player-gate-form");
+const playerNameInputEl = document.getElementById("player-name-input");
+const playerGateErrorEl = document.getElementById("player-gate-error");
+const playerGateSubmitEl = document.getElementById("player-gate-submit");
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, {
@@ -60,6 +66,10 @@ function toastError(err) {
 }
 
 async function action(path, payload = null, options = {}) {
+  if (path !== "/api/player/start" && !isPlayerReady()) {
+    renderPlayerGate();
+    return;
+  }
   try {
     state = await request(path, {
       method: "POST",
@@ -79,9 +89,37 @@ function render() {
   renderTable();
   renderControls();
   renderLog();
+  renderPlayerGate();
+  if (!isPlayerReady()) {
+    clearAutomationTimers();
+    return;
+  }
   scheduleCutAutoPass();
   scheduleWellingtonWindowAutoPass();
   scheduleBotStep();
+}
+
+function isPlayerReady() {
+  return Boolean(state?.player_ready && state?.player_name);
+}
+
+function clearAutomationTimers() {
+  if (botStepTimer) clearTimeout(botStepTimer);
+  if (cutAutoPassTimer) clearTimeout(cutAutoPassTimer);
+  if (wellingtonWindowTimer) clearTimeout(wellingtonWindowTimer);
+  botStepTimer = null;
+  cutAutoPassTimer = null;
+  wellingtonWindowTimer = null;
+}
+
+function renderPlayerGate() {
+  if (!playerGateEl) return;
+  const ready = isPlayerReady();
+  playerGateEl.classList.toggle("hidden", ready);
+  if (ready) return;
+  if (playerNameInputEl && !submittingPlayerName) {
+    playerNameInputEl.focus();
+  }
 }
 
 function syncUiStateWithGame() {
@@ -166,6 +204,7 @@ function renderStatus() {
   }
 
   statusEl.innerHTML = `
+    <div><strong>Jogador:</strong> ${state.player_name || "nao definido"}</div>
     <div><strong>Vez:</strong> ${turnName}</div>
     <div><strong>Topo do descarte:</strong> ${state.top_discard || "-"}</div>
     <div><strong>Monte:</strong> ${state.draw_pile_count} cartas</div>
@@ -974,6 +1013,35 @@ function makeText(txt) {
   const span = document.createElement("small");
   span.textContent = txt;
   return span;
+}
+
+if (playerGateFormEl) {
+  playerGateFormEl.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submittingPlayerName) return;
+    const raw = (playerNameInputEl?.value || "").trim();
+    if (!raw) {
+      if (playerGateErrorEl) playerGateErrorEl.textContent = "Informe seu nome para continuar.";
+      return;
+    }
+
+    submittingPlayerName = true;
+    if (playerGateSubmitEl) playerGateSubmitEl.disabled = true;
+    if (playerGateErrorEl) playerGateErrorEl.textContent = "";
+    try {
+      state = await request("/api/player/start", {
+        method: "POST",
+        body: JSON.stringify({ name: raw }),
+      });
+      render();
+    } catch (err) {
+      if (playerGateErrorEl) playerGateErrorEl.textContent = err.message || "Erro ao registrar nome.";
+    } finally {
+      submittingPlayerName = false;
+      if (playerGateSubmitEl) playerGateSubmitEl.disabled = false;
+      renderPlayerGate();
+    }
+  });
 }
 
 newGameBtn.addEventListener("click", () => action("/api/new-game"));

@@ -203,6 +203,7 @@ button.danger {
   border-radius: 10px;
   padding: 10px;
   background: #fbfdff;
+  min-width: 0;
 }
 
 .player.me {
@@ -222,6 +223,8 @@ button.danger {
 .player-head {
   display: flex;
   justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
   margin-bottom: 8px;
   font-size: 14px;
 }
@@ -230,6 +233,7 @@ button.danger {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 
 .player-body {
@@ -237,6 +241,7 @@ button.danger {
   grid-template-columns: 1fr auto;
   gap: 10px;
   align-items: start;
+  min-width: 0;
 }
 
 .bot-draw-zone {
@@ -276,6 +281,7 @@ button.danger {
   align-items: start;
   background: #fff;
   box-shadow: 0 1px 0 rgba(17, 24, 39, 0.03);
+  min-width: 0;
 }
 
 .card.clickable-card {
@@ -327,6 +333,8 @@ button.danger {
   grid-template-rows: auto 1fr auto;
   padding: 6px;
   color: #1f2937;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .card-face.red {
@@ -427,6 +435,47 @@ small { color: var(--muted); }
   color: #2b3642;
   border-bottom: 1px dashed #e4e9f0;
   padding-bottom: 4px;
+}
+
+.player-gate {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 18, 32, 0.6);
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.player-gate.hidden {
+  display: none;
+}
+
+.player-gate-card {
+  width: min(460px, 100%);
+  background: #ffffff;
+  border: 1px solid #d8e0ea;
+  border-radius: 14px;
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.player-gate-card p {
+  margin: 0;
+  color: #3f4c5a;
+}
+
+.player-gate-card input {
+  border: 1px solid #c8d3e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 16px;
+}
+
+.player-gate-error {
+  min-height: 18px;
+  color: #b3261e;
 }
 
 .badge {
@@ -551,6 +600,8 @@ small { color: var(--muted); }
 
   .table {
     padding: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .table-wellington-btn {
@@ -569,10 +620,20 @@ small { color: var(--muted); }
       "left center right"
       ". bottom .";
     gap: 8px;
+    min-width: 620px;
   }
 
   .player {
     padding: 6px;
+  }
+
+  .player-body {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .bot-draw-zone {
+    justify-self: end;
   }
 
   .player-head {
@@ -697,6 +758,7 @@ small { color: var(--muted); }
   .table-board {
     grid-template-columns: minmax(98px, 1fr) minmax(132px, 0.95fr) minmax(98px, 1fr);
     gap: 6px;
+    min-width: 560px;
   }
 
   .player {

@@ -17,7 +17,7 @@ MVP web do jogo de cartas Wellington (1 humano + 3 bots).
   - Q = 12
 - Habilidades ao descartar:
   - 5: ver uma carta sua
-  - 6: ver uma carta de qualquer jogador
+  - 6: ver uma carta de outro jogador
   - 7: trocar uma carta sua por uma de outro jogador sem ver
   - 8: ver uma sua e uma de outro jogador e escolher trocar ou nao
 - Corte:
@@ -49,8 +49,34 @@ Abrir no navegador:
 - http://127.0.0.1:8000
 
 ## Observacoes
-- Estado da partida fica em memoria (single game).
+- Cada sessao (cookie do navegador) tem seu proprio jogo.
+- Ao entrar, o jogador precisa informar nome.
+- O backend gera logs de entrada (`event=player_start`) visiveis no Render.
+- Persistencia opcional de jogadores no Supabase (gratis) via REST.
 - Multiplayer real (4 humanos online) fica para a proxima fase.
+
+## Logs de jogadores (gratis)
+Voce pode ver quem entrou no jogo de duas formas:
+
+- Render Logs: no painel do servico web, procure por `event=player_start`.
+- Supabase (opcional): persistir entradas em tabela para consulta historica.
+
+### Variaveis de ambiente (opcional para Supabase)
+- `SUPABASE_URL` (ex.: `https://xxxx.supabase.co`)
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Se essas variaveis nao forem definidas, o sistema continua funcionando e registra apenas no log do servidor.
+
+### Exemplo de tabela no Supabase
+```sql
+create table if not exists public.player_sessions (
+  id bigint generated always as identity primary key,
+  session_id text not null,
+  player_name text not null,
+  started_at timestamptz not null,
+  user_agent text
+);
+```
 
 ## Deploy gratis (Render)
 1. Suba este projeto para um repositorio no GitHub.

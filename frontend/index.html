@@ -30,6 +30,16 @@
     </section>
   </main>
 
+  <div id="player-gate" class="player-gate hidden" role="dialog" aria-modal="true" aria-labelledby="player-gate-title">
+    <form id="player-gate-form" class="player-gate-card">
+      <h2 id="player-gate-title">Antes de jogar</h2>
+      <p>Digite seu nome para iniciar a sua sessao.</p>
+      <input id="player-name-input" type="text" maxlength="24" autocomplete="name" placeholder="Seu nome" required />
+      <small id="player-gate-error" class="player-gate-error"></small>
+      <button id="player-gate-submit" type="submit" class="primary">Entrar</button>
+    </form>
+  </div>
+
   <script src="/assets/script.js"></script>
 </body>
 </html>
