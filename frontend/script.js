@@ -5,6 +5,8 @@ let cutAutoPassTimer = null;
 let wellingtonWindowTimer = null;
 let lastRenderedLogLine = null;
 let recentActorId = null;
+let wellingtonFlashTimer = null;
+let showWellingtonFlash = false;
 const uiState = {
   ability7Selection: {
     ownSlot: null,
@@ -94,7 +96,9 @@ function scheduleBotStep() {
     botStepTimer = null;
   }
   if (!state || state.paused || !state.can_bot_step) return;
-  const delay = Number(state.bot_delay_ms || 3000);
+  // Quando entra a vez do bot, ele compra imediatamente.
+  // A espera de 3s fica apenas entre compra e resolucao da jogada.
+  const delay = state.pending_bot_turn ? Number(state.bot_delay_ms || 3000) : 0;
   botStepTimer = setTimeout(() => {
     action("/api/bot-step");
   }, delay);
@@ -121,11 +125,13 @@ function scheduleWellingtonWindowAutoPass() {
     wellingtonWindowTimer = null;
   }
   if (!state || state.paused || !state.pending_human_wellington_window) return;
+  if (state.actions?.can_send_cut_other_card) return;
   const delay = Number(state.bot_delay_ms || 3000);
   wellingtonWindowTimer = setTimeout(() => {
     action("/api/action/pass-wellington-window", null, {
       suppressError: (err) =>
-        String(err?.message || "").includes("Nao ha janela de Wellington pendente."),
+        String(err?.message || "").includes("Nao ha janela de Wellington pendente.") ||
+        String(err?.message || "").includes("Escolha a carta para enviar"),
     });
   }, delay);
 }
@@ -139,7 +145,7 @@ function renderStatus() {
   const wellingtonAlert =
     caller === null
       ? ""
-      : `<div class="Wellington-alert"><strong>Wellington ATIVO:</strong> ${state.players[caller].name} pediu Wellington. Ninguem mais pode pedir.</div>`;
+      : `<div class="wellington-alert"><strong>Wellington ATIVO:</strong> ${state.players[caller].name} pediu Wellington. Ninguem mais pode pedir.</div>`;
 
   let scoreHtml = "";
   if (state.game_over && Array.isArray(state.scores)) {
@@ -246,13 +252,14 @@ function renderTable() {
   updateRecentActorFromLog();
 
   if (state.game_over && Array.isArray(state.scores) && state.scores.length > 0) {
-    const minScore = Math.min(...state.scores.map((s) => s.score));
-    const winners = state.scores.filter((s) => s.score === minScore);
+    const winnerIds = new Set(state.winner_ids || []);
+    const winners = state.scores.filter((s) => winnerIds.has(s.player));
     const winnersText = winners.map((w) => w.name).join(", ");
+    const winnerScore = winners.length > 0 ? winners[0].score : state.scores[0].score;
 
     const banner = document.createElement("div");
     banner.className = "winner-banner";
-    banner.textContent = `Vencedor${winners.length > 1 ? "es" : ""}: ${winnersText} (${minScore} ponto${minScore === 1 ? "" : "s"})`;
+    banner.textContent = `Vencedor${winners.length > 1 ? "es" : ""}: ${winnersText} (${winnerScore} ponto${winnerScore === 1 ? "" : "s"})`;
     tableEl.appendChild(banner);
   }
 
@@ -293,6 +300,13 @@ function renderTable() {
   board.appendChild(bottomSlot);
 
   tableEl.appendChild(board);
+
+  if (showWellingtonFlash) {
+    const flash = document.createElement("div");
+    flash.className = "wellington-call-flash";
+    flash.textContent = "Wellington";
+    tableEl.appendChild(flash);
+  }
 }
 
 function buildPlayerElement(p, isRecentActor) {
@@ -302,8 +316,8 @@ function buildPlayerElement(p, isRecentActor) {
 
   const scoreMap = new Map((state.scores || []).map((item) => [item.player, item.score]));
   const playerScore = scoreMap.has(p.id) ? scoreMap.get(p.id) : null;
-  const minScore = state.game_over && scoreMap.size > 0 ? Math.min(...scoreMap.values()) : null;
-  const isWinner = state.game_over && playerScore !== null && playerScore === minScore;
+  const winnerIds = new Set(state.winner_ids || []);
+  const isWinner = state.game_over && winnerIds.has(p.id);
 
   const badges = [];
   if (state.current_player === p.id) badges.push('<span class="badge active">Vez</span>');
@@ -415,8 +429,18 @@ function applyAbilityCardInteraction(cardEl, playerId, slot, isEmpty) {
 function applyAbility7CardInteraction(cardEl, playerId, slot) {
   const selected = uiState.ability7Selection;
   const isOwn = playerId === 0;
+  const isLockedTarget = !isOwn && Boolean(state.players[playerId]?.locked);
   const isSelectedOwn = isOwn && selected.ownSlot === slot;
   const isSelectedTarget = !isOwn && selected.targetPlayer === playerId && selected.targetSlot === slot;
+
+  if (isLockedTarget) {
+    cardEl.classList.add("disabled-card");
+    cardEl.title = "Jogador travado por Wellington";
+    cardEl.addEventListener("click", () => {
+      toastError(new Error("Esse jogador ja chamou Wellington e esta travado. Escolha outro alvo."));
+    });
+    return;
+  }
 
   cardEl.classList.add("clickable-card");
   if (isSelectedOwn || isSelectedTarget) {
@@ -447,8 +471,18 @@ function applyAbility8CardInteraction(cardEl, playerId, slot) {
 
   const selected = uiState.ability8Selection;
   const isOwn = playerId === 0;
+  const isLockedTarget = !isOwn && Boolean(state.players[playerId]?.locked);
   const isSelectedOwn = isOwn && selected.ownSlot === slot;
   const isSelectedTarget = !isOwn && selected.targetPlayer === playerId && selected.targetSlot === slot;
+
+  if (isLockedTarget) {
+    cardEl.classList.add("disabled-card");
+    cardEl.title = "Jogador travado por Wellington";
+    cardEl.addEventListener("click", () => {
+      toastError(new Error("Esse jogador ja chamou Wellington e esta travado. Escolha outro alvo."));
+    });
+    return;
+  }
 
   cardEl.classList.add("clickable-card");
   if (isSelectedOwn || isSelectedTarget) {
@@ -490,16 +524,45 @@ function applyAbility8CardInteraction(cardEl, playerId, slot) {
 
 function applyCutCardInteraction(cardEl, playerId, slot, isEmpty) {
   if (state.paused) return;
-  if (!state.actions?.can_cut || playerId !== 0 || isEmpty) return;
+  if (isEmpty) return;
 
+  // Fase 2 do corte com carta de outro: clique em carta sua para enviar.
+  if (state.actions?.can_send_cut_other_card) {
+    if (playerId !== 0) return;
+    cardEl.classList.add("clickable-card");
+    cardEl.addEventListener("click", async () => {
+      await action("/api/action/cut-other", {
+        target_player: -1,
+        target_slot: -1,
+        give_slot: slot,
+      });
+    });
+    return;
+  }
+
+  if (!state.actions?.can_cut) return;
+
+  // Corte normal: clique (ou arraste) em carta sua.
+  if (playerId === 0) {
+    cardEl.classList.add("clickable-card");
+    cardEl.draggable = true;
+    cardEl.addEventListener("click", async () => {
+      await action("/api/action/cut-self", { slot });
+    });
+    cardEl.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("cut_slot", String(slot));
+      event.dataTransfer.effectAllowed = "move";
+    });
+    return;
+  }
+
+  // Corte com carta de outro: clique direto na carta alvo.
   cardEl.classList.add("clickable-card");
-  cardEl.draggable = true;
   cardEl.addEventListener("click", async () => {
-    await action("/api/action/cut-self", { slot });
-  });
-  cardEl.addEventListener("dragstart", (event) => {
-    event.dataTransfer.setData("cut_slot", String(slot));
-    event.dataTransfer.effectAllowed = "move";
+    await action("/api/action/cut-other", {
+      target_player: playerId,
+      target_slot: slot,
+    });
   });
 }
 
@@ -642,7 +705,7 @@ function renderControls() {
     cutBox.className = "control-row";
     if (state.current_player === 0) {
       if (state.human_cut_available_until_draw) {
-        cutBox.appendChild(makeText("Corte disponivel ate voce comprar uma carta. Clique na carta ou arraste para o descarte."));
+        cutBox.appendChild(makeText("Corte disponivel ate voce comprar. Clique na carta (sua ou de outro jogador) ou arraste sua carta para o descarte."));
       } else {
         cutBox.appendChild(makeText("Corte pendente: voce tem 3s para agir (depois passa automaticamente)."));
       }
@@ -661,21 +724,41 @@ function renderControls() {
       const row = document.createElement("div");
       row.className = "control-row";
       row.appendChild(makeText(`Corte com carta de ${state.players[opt.target_player].name} slot ${opt.target_slot}:`));
-      opt.give_slots.forEach((giveSlot) => {
-        row.appendChild(
-          makeBtn(
-            `dar meu slot ${giveSlot}`,
-            () =>
-              action("/api/action/cut-other", {
-                target_player: opt.target_player,
-                target_slot: opt.target_slot,
-                give_slot: giveSlot,
-              })
-          )
-        );
-      });
+      row.appendChild(
+        makeBtn(
+          "Tentar corte",
+          () =>
+            action("/api/action/cut-other", {
+              target_player: opt.target_player,
+              target_slot: opt.target_slot,
+            })
+        )
+      );
       controlsEl.appendChild(row);
     });
+  }
+
+  if (state.actions?.can_send_cut_other_card) {
+    const row = document.createElement("div");
+    row.className = "control-row";
+    row.appendChild(makeText("Corte confirmado. Clique em uma carta sua para enviar ao jogador alvo:"));
+    const sendSlots = state.actions?.send_cut_other_slots || [];
+    sendSlots.forEach((slot) => {
+      row.appendChild(
+        makeBtn(
+          `Enviar meu slot ${slot}`,
+          () =>
+            action("/api/action/cut-other", {
+              target_player: -1,
+              target_slot: -1,
+              give_slot: slot,
+            }),
+          false,
+          "primary"
+        )
+      );
+    });
+    controlsEl.appendChild(row);
   }
 
   if (state.pending_ability) {
@@ -697,7 +780,7 @@ function renderControls() {
       const own = sel.ownSlot === null ? "-" : `slot ${sel.ownSlot}`;
       const target =
         sel.targetPlayer === null ? "-" : `${state.players[sel.targetPlayer].name} slot ${sel.targetSlot}`;
-      row.appendChild(makeText(`Habilidade 7: clique em 1 carta sua e 1 de outro jogador. Selecionado: sua ${own} / alvo ${target}.`));
+      row.appendChild(makeText(`Habilidade 7: clique em 1 carta sua e 1 de outro jogador (nao travado). Selecionado: sua ${own} / alvo ${target}.`));
       const ready = sel.ownSlot !== null && sel.targetPlayer !== null && sel.targetSlot !== null;
       row.appendChild(
         makeBtn(
@@ -721,7 +804,7 @@ function renderControls() {
       const own = sel.ownSlot === null ? "-" : `slot ${sel.ownSlot}`;
       const target =
         sel.targetPlayer === null ? "-" : `${state.players[sel.targetPlayer].name} slot ${sel.targetSlot}`;
-      helper.textContent = `Clique em 1 carta sua e 1 carta de outro jogador para revelar. Selecionado: sua ${own} / alvo ${target}.`;
+      helper.textContent = `Clique em 1 carta sua e 1 carta de outro jogador (nao travado) para revelar. Selecionado: sua ${own} / alvo ${target}.`;
       row.appendChild(helper);
 
       if (state.pending_ability8_preview) {
@@ -794,6 +877,22 @@ function updateRecentActorFromLog() {
       break;
     }
   }
+
+  if (latest.includes("chamou Wellington")) {
+    triggerWellingtonFlash();
+  }
+}
+
+function triggerWellingtonFlash() {
+  showWellingtonFlash = true;
+  if (wellingtonFlashTimer) {
+    clearTimeout(wellingtonFlashTimer);
+    wellingtonFlashTimer = null;
+  }
+  wellingtonFlashTimer = setTimeout(() => {
+    showWellingtonFlash = false;
+    render();
+  }, 1400);
 }
 
 function makeBtn(label, onClick, disabled = false, cls = "") {

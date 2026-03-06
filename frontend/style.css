@@ -78,6 +78,8 @@ button.danger {
   background:
     radial-gradient(circle at 50% 30%, #2f9a62 0%, #1f7d4b 55%, #18603a 100%);
   border-color: #2a764d;
+  position: relative;
+  overflow: hidden;
 }
 
 .winner-banner {
@@ -289,6 +291,11 @@ button.danger {
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.28);
 }
 
+.card.disabled-card {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 .card.unknown {
   background: linear-gradient(135deg, #e7edf8, #dce7f7);
   border-color: #b9cae8;
@@ -444,6 +451,26 @@ small { color: var(--muted); }
   color: #6e3e00;
   padding: 8px 10px;
   font-weight: 700;
+}
+
+.wellington-call-flash {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  color: #d01818;
+  font-size: clamp(42px, 9vw, 88px);
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: none;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: wellington-flash 1.4s ease-out forwards;
+}
+
+@keyframes wellington-flash {
+  0% { opacity: 0; transform: translate(-50%, -56%) scale(0.92); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -44%) scale(1.05); }
 }
 
 @keyframes played-pulse {

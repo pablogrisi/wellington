@@ -1,6 +1,10 @@
 ﻿import json
+import os
+import tempfile
+import threading
+import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,16 +27,40 @@ app.add_middleware(
 
 GAME = WellingtonGame()
 STATE_FILE = Path(__file__).resolve().parents[1] / "game_state.json"
+STATE_LOCK = threading.Lock()
 
 
 def save_game_state() -> None:
+    payload = json.dumps(GAME.to_state_dict(), ensure_ascii=False, indent=2)
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    temp_file = STATE_FILE.with_suffix(".tmp")
-    temp_file.write_text(
-        json.dumps(GAME.to_state_dict(), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    temp_file.replace(STATE_FILE)
+
+    with STATE_LOCK:
+        fd, temp_path = tempfile.mkstemp(
+            prefix="game_state_",
+            suffix=".tmp",
+            dir=str(STATE_FILE.parent),
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp:
+                tmp.write(payload)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+
+            for attempt in range(5):
+                try:
+                    os.replace(temp_path, STATE_FILE)
+                    temp_path = ""
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
 
 def load_game_state_or_new() -> None:
@@ -66,7 +94,7 @@ class CutSelfPayload(BaseModel):
 class CutOtherPayload(BaseModel):
     target_player: int
     target_slot: int
-    give_slot: int
+    give_slot: Optional[int] = None
 
 
 def safe_action(fn, allow_when_paused: bool = False):
@@ -179,5 +207,3 @@ app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR)), name="assets")
 @app.get("/")
 def root():
     return FileResponse(FRONTEND_DIR / "index.html")
-
-

@@ -61,6 +61,7 @@ class WellingtonGame:
         self.pending_ability: Optional[Dict[str, Any]] = None
         self.pending_ability8_preview: Optional[Dict[str, Any]] = None
         self.pending_human_cut: bool = False
+        self.pending_human_cut_other_transfer: Optional[Dict[str, Any]] = None
         self.human_cut_available_until_draw: bool = False
         self.pending_human_wellington_window: bool = False
         self.paused: bool = False
@@ -95,6 +96,7 @@ class WellingtonGame:
         self.pending_ability = None
         self.pending_ability8_preview = None
         self.pending_human_cut = False
+        self.pending_human_cut_other_transfer = None
         self.human_cut_available_until_draw = False
         self.pending_human_wellington_window = False
         self.paused = False
@@ -125,6 +127,7 @@ class WellingtonGame:
             "pending_ability": self.pending_ability,
             "pending_ability8_preview": self.pending_ability8_preview,
             "pending_human_cut": self.pending_human_cut,
+            "pending_human_cut_other_transfer": self.pending_human_cut_other_transfer,
             "human_cut_available_until_draw": self.human_cut_available_until_draw,
             "pending_human_wellington_window": self.pending_human_wellington_window,
             "paused": self.paused,
@@ -159,6 +162,7 @@ class WellingtonGame:
         self.pending_ability = data.get("pending_ability")
         self.pending_ability8_preview = data.get("pending_ability8_preview")
         self.pending_human_cut = bool(data.get("pending_human_cut", False))
+        self.pending_human_cut_other_transfer = data.get("pending_human_cut_other_transfer")
         self.human_cut_available_until_draw = bool(data.get("human_cut_available_until_draw", False))
         self.pending_human_wellington_window = bool(data.get("pending_human_wellington_window", False))
         self.paused = bool(data.get("paused", False))
@@ -200,7 +204,11 @@ class WellingtonGame:
         while not self.game_over:
             if self.paused:
                 return
-            if self.pending_human_cut or self.pending_ability is not None:
+            if (
+                self.pending_human_cut
+                or self.pending_human_cut_other_transfer is not None
+                or self.pending_ability is not None
+            ):
                 return
             if self.current_player == 0:
                 return
@@ -213,6 +221,7 @@ class WellingtonGame:
             and not self.paused
             and self.current_player != 0
             and not self.pending_human_cut
+            and self.pending_human_cut_other_transfer is None
             and self.pending_ability is None
         )
 
@@ -287,6 +296,8 @@ class WellingtonGame:
     def action_call_wellington(self) -> None:
         self._ensure_not_over()
         self._ensure_human_turn()
+        if self.pending_human_cut_other_transfer is not None:
+            raise ValueError("Escolha a carta para enviar ao outro jogador antes de chamar Wellington.")
         if not self.pending_human_wellington_window:
             raise ValueError("Voce so pode chamar Wellington apos finalizar sua jogada.")
         if self.wellington_caller is not None:
@@ -305,6 +316,8 @@ class WellingtonGame:
         self._ensure_not_over()
         if not self.pending_human_wellington_window:
             raise ValueError("Nao ha janela de Wellington pendente.")
+        if self.pending_human_cut_other_transfer is not None:
+            raise ValueError("Escolha a carta para enviar ao outro jogador antes de passar.")
         self.pending_human_cut = False
         self.human_cut_available_until_draw = False
         self.pending_human_wellington_window = False
@@ -348,6 +361,10 @@ class WellingtonGame:
             player.known_slots.discard(slot)
             self.discard_pile.append(card)
             self._log(f"Voce cortou com sucesso usando {card.label()} (slot {slot}).")
+            # Apos corte, abrimos nova janela de 3s para cortes em sequencia.
+            self.pending_human_cut = True
+            self.human_cut_available_until_draw = False
+            return
         else:
             self._penalty_blind_draw(0, 2)
             self._log(
@@ -364,8 +381,38 @@ class WellingtonGame:
             return
         self._finish_turn_after_play(player_idx=self.current_player)
 
-    def action_cut_other(self, target_player: int, target_slot: int, give_slot: int) -> None:
+    def action_cut_other(self, target_player: int, target_slot: int, give_slot: Optional[int]) -> None:
         self._ensure_not_over()
+        human = self.players[0]
+
+        # Fase 2: corte ja confirmado, aguardando o humano escolher qual carta enviar.
+        if self.pending_human_cut_other_transfer is not None:
+            transfer = self.pending_human_cut_other_transfer
+            transfer_target_player = int(transfer["target_player"])
+            transfer_target_slot = int(transfer["target_slot"])
+            target = self.players[transfer_target_player]
+
+            if give_slot is None:
+                raise ValueError("Escolha qual carta sua sera enviada.")
+            self._validate_slot(human, give_slot)
+            give_card = human.cards[give_slot]
+            if give_card is None:
+                raise ValueError("Seu slot escolhido esta vazio.")
+
+            target.cards[transfer_target_slot] = give_card
+            human.cards[give_slot] = None
+            human.known_slots.discard(give_slot)
+            self._forget_human_knowledge(transfer_target_player, transfer_target_slot)
+            self.pending_human_cut_other_transfer = None
+            self._log(
+                f"Voce enviou sua carta do slot {give_slot} para {target.name}, slot {transfer_target_slot}."
+            )
+            # Apos concluir corte com carta de outro, abre nova janela de 3s para cortes em sequencia.
+            self.pending_human_cut = True
+            self.human_cut_available_until_draw = False
+            return
+
+        # Fase 1: tentativa de corte com carta de outro jogador.
         if not self._can_human_cut_now():
             raise ValueError("Nao ha corte pendente.")
         if target_player == 0:
@@ -375,44 +422,35 @@ class WellingtonGame:
 
         top = self._top_discard()
         target = self.players[target_player]
-        human = self.players[0]
-
         self._validate_slot(target, target_slot)
-        self._validate_slot(human, give_slot)
-
         target_card = target.cards[target_slot]
-        give_card = human.cards[give_slot]
-
         if target_card is None:
             raise ValueError("Slot alvo vazio.")
-        if give_card is None:
-            raise ValueError("Seu slot escolhido esta vazio.")
+
+        # A carta alvo sempre sai da mesa (acertando ou errando), conforme regra.
+        target.cards[target_slot] = None
+        self._forget_human_knowledge(target_player, target_slot)
+        self.discard_pile.append(target_card)
 
         if target_card.rank == top.rank:
-            self.discard_pile.append(target_card)
-            target.cards[target_slot] = give_card
-            human.cards[give_slot] = None
-            human.known_slots.discard(give_slot)
-
-            self._forget_human_knowledge(target_player, target_slot)
+            self.pending_human_cut = False
+            self.pending_human_cut_other_transfer = {
+                "target_player": target_player,
+                "target_slot": target_slot,
+            }
             self._log(
-                f"Voce cortou com carta do {target.name} ({target_card.label()}) e deu sua carta do slot {give_slot}."
+                f"Corte certo com carta de {target.name} ({target_card.label()}). Escolha sua carta para enviar."
             )
-        else:
-            self._penalty_blind_draw(0, 2)
-            self._log(
-                f"Corte errado com carta de outro jogador! Era {target_card.label()}, topo era {top.label()}."
-            )
-
-        self.pending_human_cut = False
-        if self.current_player == 0 and self.drawn_card is None:
-            if self.pending_ability is not None:
-                return
-            if self.pending_human_wellington_window:
-                return
-            self._advance_turn()
             return
-        self._finish_turn_after_play(player_idx=self.current_player)
+
+        self._penalty_blind_draw(0, 1)
+        self._log(
+            f"Corte errado com carta de outro jogador! Era {target_card.label()}, topo era {top.label()}. "
+            "Voce comprou 1 cega e o jogador alvo perdeu a carta."
+        )
+        self.pending_human_cut = True
+        self.human_cut_available_until_draw = False
+        return
 
     def action_use_ability(self, payload: Dict[str, Any]) -> None:
         self._ensure_not_over()
@@ -504,16 +542,19 @@ class WellingtonGame:
             "draw_pile_count": len(self.draw_pile),
             "drawn_card": human_drawn_label,
             "pending_human_cut": self.pending_human_cut,
+            "pending_human_cut_other_transfer": self.pending_human_cut_other_transfer,
             "human_cut_available_until_draw": self.human_cut_available_until_draw,
             "pending_human_wellington_window": self.pending_human_wellington_window,
             "paused": self.paused,
             "cut_options": self._human_cut_options(),
             "pending_ability": ability,
             "pending_ability8_preview": self.pending_ability8_preview,
+            "pending_bot_turn": self.pending_bot_turn,
             "can_bot_step": self.can_bot_step(),
             "bot_delay_ms": 3000,
             "players": players_payload,
             "scores": self._scores_if_over(),
+            "winner_ids": self._winner_ids_if_over(),
             "log": self.log[-20:],
             "actions": {
                 "can_draw": self._can_human_draw(),
@@ -521,6 +562,8 @@ class WellingtonGame:
                 "replace_slots": self._human_replace_slots(),
                 "can_call_wellington": self._can_human_call_wellington(),
                 "can_cut": self._can_human_cut_now(),
+                "can_send_cut_other_card": self.pending_human_cut_other_transfer is not None,
+                "send_cut_other_slots": self._human_send_cut_other_slots(),
             },
         }
 
@@ -547,6 +590,8 @@ class WellingtonGame:
     def _ensure_no_pending(self) -> None:
         if self.pending_human_cut:
             raise ValueError("Resolva o corte pendente.")
+        if self.pending_human_cut_other_transfer is not None:
+            raise ValueError("Escolha a carta para enviar ao outro jogador.")
         if self.pending_ability is not None:
             raise ValueError("Resolva a habilidade pendente.")
         if self.pending_human_wellington_window:
@@ -622,6 +667,7 @@ class WellingtonGame:
         self.game_over = True
         self.drawn_card = None
         self.pending_human_cut = False
+        self.pending_human_cut_other_transfer = None
         self.human_cut_available_until_draw = False
         self.pending_ability = None
         self.pending_ability8_preview = None
@@ -691,6 +737,8 @@ class WellingtonGame:
             raise ValueError("Escolha outro jogador para habilidade 7.")
         own = self.players[player_idx]
         target = self.players[target_idx]
+        if target.locked:
+            raise ValueError("Esse jogador ja chamou Wellington e esta travado. Escolha outro alvo.")
         self._validate_slot(own, own_slot)
         self._validate_slot(target, target_slot)
         c1 = own.cards[own_slot]
@@ -698,13 +746,20 @@ class WellingtonGame:
         if c1 is None or c2 is None:
             raise ValueError("Nao pode trocar com slot vazio.")
 
+        # Se o humano ja conhecia a carta que vai enviar, esse conhecimento acompanha a carta.
+        human_knows_sent_card = player_idx == 0 and own_slot in self.players[0].known_slots
+
         own.cards[own_slot], target.cards[target_slot] = c2, c1
 
         if player_idx == 0:
             self.players[0].known_slots.discard(own_slot)
+            if human_knows_sent_card:
+                self.human_known_other[(target_idx, target_slot)] = c1.label()
+            else:
+                self._forget_human_knowledge(target_idx, target_slot)
         else:
             self._forget_human_knowledge(player_idx, own_slot)
-        self._forget_human_knowledge(target_idx, target_slot)
+            self._forget_human_knowledge(target_idx, target_slot)
         self._log(f"Habilidade 7: troca cega realizada entre slot {own_slot} e jogador {target_idx} slot {target_slot}.")
 
     def _ability_8(self, player_idx: int, own_slot: int, target_idx: int, target_slot: int, do_swap: bool) -> None:
@@ -712,6 +767,8 @@ class WellingtonGame:
             raise ValueError("Escolha outro jogador para habilidade 8.")
         own = self.players[player_idx]
         target = self.players[target_idx]
+        if target.locked:
+            raise ValueError("Esse jogador ja chamou Wellington e esta travado. Escolha outro alvo.")
         self._validate_slot(own, own_slot)
         self._validate_slot(target, target_slot)
 
@@ -745,6 +802,8 @@ class WellingtonGame:
             raise ValueError("Escolha outro jogador para habilidade 8.")
         own = self.players[player_idx]
         target = self.players[target_idx]
+        if target.locked:
+            raise ValueError("Esse jogador ja chamou Wellington e esta travado. Escolha outro alvo.")
         self._validate_slot(own, own_slot)
         self._validate_slot(target, target_slot)
         c1 = own.cards[own_slot]
@@ -783,7 +842,10 @@ class WellingtonGame:
             self._log(f"{player.name} usou habilidade 6.")
             return
         if rank == "7":
-            t = self.random.choice([i for i in range(len(self.players)) if i != player_idx])
+            candidates = [i for i in range(len(self.players)) if i != player_idx and not self.players[i].locked]
+            if not candidates:
+                return
+            t = self.random.choice(candidates)
             t_slots = [i for i, c in enumerate(self.players[t].cards) if c is not None]
             if not t_slots:
                 return
@@ -792,7 +854,10 @@ class WellingtonGame:
             self._ability_7(player_idx, own_slot, t, target_slot)
             return
         if rank == "8":
-            t = self.random.choice([i for i in range(len(self.players)) if i != player_idx])
+            candidates = [i for i in range(len(self.players)) if i != player_idx and not self.players[i].locked]
+            if not candidates:
+                return
+            t = self.random.choice(candidates)
             t_slots = [i for i, c in enumerate(self.players[t].cards) if c is not None]
             if not t_slots:
                 return
@@ -1014,6 +1079,28 @@ class WellingtonGame:
         scores.sort(key=lambda x: x["score"])
         return scores
 
+    def _winner_ids_if_over(self) -> Optional[List[int]]:
+        if not self.game_over:
+            return None
+        totals = [
+            sum(c.points for c in p.cards if c is not None)
+            for p in self.players
+        ]
+        if not totals:
+            return []
+        min_score = min(totals)
+        candidates = [idx for idx, total in enumerate(totals) if total == min_score]
+        if len(candidates) <= 1:
+            return candidates
+
+        # Regra: em empate com quem chamou Wellington, quem NAO chamou vence.
+        caller = self.wellington_caller
+        if caller is not None and caller in candidates:
+            non_caller_candidates = [idx for idx in candidates if idx != caller]
+            if non_caller_candidates:
+                return non_caller_candidates
+        return candidates
+
     def _can_human_draw(self) -> bool:
         return (
             not self.game_over
@@ -1021,6 +1108,7 @@ class WellingtonGame:
             and self.current_player == 0
             and not self.players[0].locked
             and self.drawn_card is None
+            and self.pending_human_cut_other_transfer is None
             and self.pending_ability is None
             and not self.pending_human_wellington_window
         )
@@ -1033,6 +1121,7 @@ class WellingtonGame:
             and not self.players[0].locked
             and self.drawn_card is not None
             and not self.pending_human_cut
+            and self.pending_human_cut_other_transfer is None
             and self.pending_ability is None
             and not self.pending_human_wellington_window
         )
@@ -1048,12 +1137,15 @@ class WellingtonGame:
             and not self.paused
             and self.current_player == 0
             and not self.players[0].locked
+            and self.pending_human_cut_other_transfer is None
             and self.pending_human_wellington_window
             and self.wellington_caller is None
         )
 
     def _can_human_cut_now(self) -> bool:
         if self.game_over or self.paused or self.players[0].locked:
+            return False
+        if self.pending_human_cut_other_transfer is not None:
             return False
         if self.current_player == 0 and self.drawn_card is not None:
             return False
@@ -1071,7 +1163,13 @@ class WellingtonGame:
             return
         if self.players[0].locked:
             self.pending_human_cut = False
+            self.pending_human_cut_other_transfer = None
             self.human_cut_available_until_draw = False
+
+    def _human_send_cut_other_slots(self) -> List[int]:
+        if self.pending_human_cut_other_transfer is None:
+            return []
+        return [i for i, c in enumerate(self.players[0].cards) if c is not None]
 
     def _clear_bot_visual_next_turn(self) -> None:
         to_clear = []
