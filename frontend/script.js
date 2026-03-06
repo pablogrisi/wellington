@@ -7,6 +7,9 @@ let lastRenderedLogLine = null;
 let recentActorId = null;
 let wellingtonFlashTimer = null;
 let showWellingtonFlash = false;
+let cutFlashTimer = null;
+let showCutFlash = false;
+let cutFlashText = "CORTE";
 const uiState = {
   ability7Selection: {
     ownSlot: null,
@@ -305,6 +308,12 @@ function renderTable() {
     const flash = document.createElement("div");
     flash.className = "wellington-call-flash";
     flash.textContent = "Wellington";
+    tableEl.appendChild(flash);
+  }
+  if (showCutFlash) {
+    const flash = document.createElement("div");
+    flash.className = "cut-call-flash";
+    flash.textContent = cutFlashText;
     tableEl.appendChild(flash);
   }
 }
@@ -881,6 +890,10 @@ function updateRecentActorFromLog() {
   if (latest.includes("chamou Wellington")) {
     triggerWellingtonFlash();
   }
+  const cutText = buildCutFlashText(latest);
+  if (cutText) {
+    triggerCutFlash(cutText);
+  }
 }
 
 function triggerWellingtonFlash() {
@@ -893,6 +906,35 @@ function triggerWellingtonFlash() {
     showWellingtonFlash = false;
     render();
   }, 1400);
+}
+
+function triggerCutFlash(text = "CORTE") {
+  cutFlashText = text;
+  showCutFlash = true;
+  if (cutFlashTimer) {
+    clearTimeout(cutFlashTimer);
+    cutFlashTimer = null;
+  }
+  cutFlashTimer = setTimeout(() => {
+    showCutFlash = false;
+    render();
+  }, 1100);
+}
+
+function buildCutFlashText(logLine) {
+  if (!logLine || !logLine.includes("cortou")) return null;
+
+  const byOther = logLine.match(/^Bot\s+(\d+)\s+cortou\s+pelo\s+Bot\s+(\d+)/i);
+  if (byOther) {
+    return `BOT ${byOther[1]} CORTOU PELO BOT ${byOther[2]}`;
+  }
+
+  const own = logLine.match(/^Bot\s+(\d+)\s+cortou\b/i);
+  if (own) {
+    return `BOT ${own[1]} CORTOU`;
+  }
+
+  return "CORTE";
 }
 
 function makeBtn(label, onClick, disabled = false, cls = "") {

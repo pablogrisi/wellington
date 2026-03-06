@@ -4,22 +4,22 @@
       "name": "Voce",
       "is_bot": false,
       "cards": [
+        {
+          "rank": "JK",
+          "suit": null
+        },
+        {
+          "rank": "K",
+          "suit": "S"
+        },
         null,
-        {
-          "rank": "JK",
-          "suit": null
-        },
-        {
-          "rank": "JK",
-          "suit": null
-        },
         null
       ],
       "known_slots": [
-        1,
-        2
+        0,
+        1
       ],
-      "locked": false
+      "locked": true
     },
     {
       "name": "Bot 1",
@@ -27,20 +27,22 @@
       "cards": [
         {
           "rank": "8",
-          "suit": "S"
-        },
-        null,
-        {
-          "rank": "8",
           "suit": "C"
         },
         {
-          "rank": "7",
-          "suit": "C"
+          "rank": "10",
+          "suit": "H"
+        },
+        {
+          "rank": "JK",
+          "suit": null
+        },
+        {
+          "rank": "K",
+          "suit": "H"
         }
       ],
       "known_slots": [
-        2,
         3
       ],
       "locked": false
@@ -50,22 +52,24 @@
       "is_bot": true,
       "cards": [
         {
-          "rank": "K",
+          "rank": "4",
           "suit": "H"
+        },
+        {
+          "rank": "6",
+          "suit": "H"
+        },
+        {
+          "rank": "K",
+          "suit": "C"
         },
         {
           "rank": "3",
           "suit": "S"
-        },
-        null,
-        {
-          "rank": "A",
-          "suit": "H"
         }
       ],
       "known_slots": [
-        2,
-        3
+        2
       ],
       "locked": false
     },
@@ -74,167 +78,164 @@
       "is_bot": true,
       "cards": [
         {
+          "rank": "7",
+          "suit": "H"
+        },
+        {
+          "rank": "A",
+          "suit": "H"
+        },
+        {
           "rank": "A",
           "suit": "C"
         },
         {
-          "rank": "4",
-          "suit": "C"
-        },
-        {
-          "rank": "K",
+          "rank": "3",
           "suit": "D"
-        },
-        {
-          "rank": "K",
-          "suit": "C"
         }
       ],
       "known_slots": [
+        0,
         2,
         3
       ],
-      "locked": true
+      "locked": false
     }
   ],
   "draw_pile": [
     {
-      "rank": "K",
-      "suit": "S"
+      "rank": "J",
+      "suit": "H"
     },
     {
       "rank": "6",
       "suit": "D"
     },
     {
-      "rank": "2",
-      "suit": "D"
-    },
-    {
-      "rank": "J",
-      "suit": "S"
-    },
-    {
-      "rank": "A",
-      "suit": "D"
-    },
-    {
-      "rank": "2",
-      "suit": "H"
+      "rank": "7",
+      "suit": "C"
     },
     {
       "rank": "10",
-      "suit": "H"
+      "suit": "S"
     },
     {
       "rank": "9",
-      "suit": "C"
+      "suit": "H"
     },
     {
       "rank": "3",
       "suit": "H"
     },
     {
+      "rank": "6",
+      "suit": "C"
+    },
+    {
       "rank": "5",
-      "suit": "S"
+      "suit": "C"
     },
     {
       "rank": "7",
       "suit": "S"
-    },
-    {
-      "rank": "3",
-      "suit": "D"
-    },
-    {
-      "rank": "Q",
-      "suit": "H"
-    },
-    {
-      "rank": "8",
-      "suit": "H"
-    },
-    {
-      "rank": "5",
-      "suit": "D"
-    },
-    {
-      "rank": "2",
-      "suit": "S"
-    },
-    {
-      "rank": "9",
-      "suit": "S"
-    },
-    {
-      "rank": "9",
-      "suit": "H"
     },
     {
       "rank": "A",
       "suit": "S"
     },
     {
-      "rank": "Q",
-      "suit": "S"
+      "rank": "A",
+      "suit": "D"
     },
     {
-      "rank": "6",
-      "suit": "H"
-    },
-    {
-      "rank": "5",
-      "suit": "H"
-    },
-    {
-      "rank": "4",
+      "rank": "J",
       "suit": "D"
     },
     {
       "rank": "5",
+      "suit": "H"
+    },
+    {
+      "rank": "K",
+      "suit": "D"
+    },
+    {
+      "rank": "5",
+      "suit": "D"
+    },
+    {
+      "rank": "J",
+      "suit": "S"
+    },
+    {
+      "rank": "2",
       "suit": "C"
     },
     {
-      "rank": "7",
+      "rank": "2",
+      "suit": "S"
+    },
+    {
+      "rank": "4",
+      "suit": "C"
+    },
+    {
+      "rank": "2",
       "suit": "H"
     },
     {
       "rank": "J",
-      "suit": "H"
+      "suit": "C"
     },
     {
-      "rank": "8",
+      "rank": "10",
       "suit": "D"
     },
     {
-      "rank": "7",
-      "suit": "D"
+      "rank": "9",
+      "suit": "C"
     },
     {
-      "rank": "4",
+      "rank": "Q",
       "suit": "H"
     },
     {
-      "rank": "4",
-      "suit": "S"
+      "rank": "9",
+      "suit": "D"
     }
   ],
   "discard_pile": [
     {
+      "rank": "9",
+      "suit": "S"
+    },
+    {
+      "rank": "4",
+      "suit": "D"
+    },
+    {
+      "rank": "4",
+      "suit": "S"
+    },
+    {
+      "rank": "7",
+      "suit": "D"
+    },
+    {
       "rank": "Q",
       "suit": "D"
     },
     {
       "rank": "Q",
-      "suit": "C"
+      "suit": "S"
     },
     {
-      "rank": "J",
-      "suit": "C"
-    },
-    {
-      "rank": "J",
+      "rank": "8",
       "suit": "D"
+    },
+    {
+      "rank": "8",
+      "suit": "S"
     },
     {
       "rank": "3",
@@ -242,36 +243,32 @@
     },
     {
       "rank": "10",
+      "suit": "C"
+    },
+    {
+      "rank": "6",
       "suit": "S"
     },
     {
-      "rank": "10",
-      "suit": "D"
-    },
-    {
-      "rank": "10",
+      "rank": "Q",
       "suit": "C"
     },
     {
       "rank": "2",
-      "suit": "C"
-    },
-    {
-      "rank": "9",
       "suit": "D"
     },
     {
-      "rank": "6",
-      "suit": "C"
+      "rank": "8",
+      "suit": "H"
     },
     {
-      "rank": "6",
+      "rank": "5",
       "suit": "S"
     }
   ],
-  "current_player": 2,
+  "current_player": 3,
   "drawn_card": null,
-  "wellington_caller": 3,
+  "wellington_caller": 0,
   "game_over": true,
   "pending_ability": null,
   "pending_ability8_preview": null,
@@ -286,34 +283,51 @@
   "human_known_other": [],
   "log": [
     "Nova partida iniciada.",
-    "Voce comprou 10D.",
-    "Voce trocou slot 0 por 10D e descartou QC.",
+    "Voce comprou JK.",
+    "Voce trocou slot 0 por JK e descartou 4D.",
     "Janela de Wellington aberta por 3s.",
     "Voce passou no corte.",
     "Bot 1 comprou uma carta.",
     "Bot 1 descartou a carta da mesa no slot 2.",
-    "Bot 2 cortou com JD (slot 2).",
     "Voce passou no corte.",
     "Bot 2 comprou uma carta.",
-    "Bot 2 descartou a carta da mesa no slot 0.",
+    "Bot 2 descartou a carta da mesa no slot 3.",
+    "Habilidade 7: troca cega realizada entre slot 3 e jogador 1 slot 2.",
     "Voce passou no corte.",
     "Bot 3 comprou uma carta.",
-    "Bot 3 descartou a carta da mesa no slot 1.",
-    "Voce cortou com sucesso usando 10D (slot 0).",
-    "Voce cortou com sucesso usando 10C (slot 3).",
+    "Bot 3 descartou a carta da mesa no slot 2.",
+    "Voce cortou com sucesso usando QS (slot 2).",
     "Voce passou no corte.",
-    "Bot 3 chamou Wellington.",
-    "Voce comprou JK.",
-    "Voce trocou slot 1 por JK e descartou 2C.",
+    "Voce comprou 8S.",
+    "Voce trocou slot 3 por 8S e descartou 8D.",
+    "Habilidade da carta 8 pendente para voce.",
+    "Habilidade 8: cartas reveladas para decisao (seu slot 1 e jogador 3 slot 2).",
+    "Habilidade 8: voce viu KS (seu slot 1) e 6S do jogador 3 slot 2.",
+    "Habilidade 8: troca nao aplicada.",
+    "Janela de Wellington aberta por 3s.",
+    "Voce cortou com sucesso usando 8S (slot 3).",
     "Voce passou no corte.",
     "Bot 1 comprou uma carta.",
     "Bot 1 descartou a carta comprada.",
     "Voce passou no corte.",
     "Bot 2 comprou uma carta.",
     "Bot 2 descartou a carta comprada.",
-    "Bot 1 cortou com 6S (slot 1).",
-    "Bot 2 usou habilidade 6.",
     "Voce passou no corte.",
+    "Bot 3 comprou uma carta.",
+    "Bot 3 descartou a carta da mesa no slot 2.",
+    "Bot 3 usou habilidade 6.",
+    "Voce passou no corte.",
+    "Voce comprou QC.",
+    "Voce descartou QC.",
+    "Janela de Wellington aberta por 3s.",
+    "Voce chamou Wellington e travou suas cartas.",
+    "Bot 1 comprou uma carta.",
+    "Bot 1 descartou a carta da mesa no slot 3.",
+    "Bot 2 comprou uma carta.",
+    "Bot 2 descartou a carta comprada.",
+    "Habilidade 8: troca nao aplicada.",
+    "Bot 3 comprou uma carta.",
+    "Bot 3 descartou a carta da mesa no slot 3.",
     "Partida encerrada por Wellington. Cartas reveladas."
   ]
 }

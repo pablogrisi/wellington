@@ -712,8 +712,8 @@ class WellingtonGame:
         card = player.cards[slot]
         if card is None:
             raise ValueError("Slot vazio.")
+        player.known_slots.add(slot)
         if player_idx == 0:
-            player.known_slots.add(slot)
             self._log(f"Habilidade 5: voce viu seu slot {slot} ({card.label()}).")
 
     def _ability_6(self, player_idx: int, target_idx: int, slot: int) -> None:
@@ -731,6 +731,9 @@ class WellingtonGame:
             else:
                 self.human_known_other[(target_idx, slot)] = card.label()
             self._log(f"Habilidade 6: voce viu {card.label()} do jogador {target_idx}, slot {slot}.")
+        else:
+            if target_idx == player_idx:
+                self.players[player_idx].known_slots.add(slot)
 
     def _ability_7(self, player_idx: int, own_slot: int, target_idx: int, target_slot: int) -> None:
         if target_idx == player_idx:
@@ -758,7 +761,10 @@ class WellingtonGame:
             else:
                 self._forget_human_knowledge(target_idx, target_slot)
         else:
+            own.known_slots.discard(own_slot)
             self._forget_human_knowledge(player_idx, own_slot)
+            if target_idx != 0:
+                target.known_slots.discard(target_slot)
             self._forget_human_knowledge(target_idx, target_slot)
         self._log(f"Habilidade 7: troca cega realizada entre slot {own_slot} e jogador {target_idx} slot {target_slot}.")
 
@@ -783,6 +789,8 @@ class WellingtonGame:
             self._log(
                 f"Habilidade 8: voce viu {c1.label()} (seu slot {own_slot}) e {c2.label()} do jogador {target_idx} slot {target_slot}."
             )
+        else:
+            own.known_slots.add(own_slot)
 
         if do_swap:
             own.cards[own_slot], target.cards[target_slot] = c2, c1
@@ -792,6 +800,9 @@ class WellingtonGame:
                 # Continua conhecido no alvo: apos a troca, o slot alvo passa a conter c1, que foi visto.
                 self.human_known_other[(target_idx, target_slot)] = c1.label()
             else:
+                own.known_slots.add(own_slot)
+                if target_idx != 0:
+                    target.known_slots.discard(target_slot)
                 self._forget_human_knowledge(player_idx, own_slot)
             self._log("Habilidade 8: troca aplicada.")
         else:
@@ -833,12 +844,17 @@ class WellingtonGame:
             return
 
         if rank == "5":
+            unknown_own = [s for s in own_slots if s not in player.known_slots]
+            slot = self.random.choice(unknown_own if unknown_own else own_slots)
+            self._ability_5(player_idx, slot)
             return
         if rank == "6":
-            t = self.random.choice([i for i in range(len(self.players)) if i != player_idx])
+            t = self.random.choice([i for i in range(len(self.players)) if not self.players[i].locked])
             t_slots = [i for i, c in enumerate(self.players[t].cards) if c is not None]
             if not t_slots:
                 return
+            slot = self.random.choice(t_slots)
+            self._ability_6(player_idx, t, slot)
             self._log(f"{player.name} usou habilidade 6.")
             return
         if rank == "7":
@@ -890,15 +906,19 @@ class WellingtonGame:
             if p.locked:
                 continue
 
-            matching = [s for s, c in enumerate(p.cards) if c is not None and c.rank == top.rank]
-            if not matching:
+            matching_known = [
+                s for s, c in enumerate(p.cards)
+                if c is not None and c.rank == top.rank and s in p.known_slots
+            ]
+            if not matching_known:
                 continue
-            if self.random.random() > 0.55:
+            if self.random.random() > 0.60:
                 continue
 
-            slot = self.random.choice(matching)
+            slot = self.random.choice(matching_known)
             card = p.cards[slot]
             p.cards[slot] = None
+            p.known_slots.discard(slot)
             self._forget_human_knowledge(idx, slot)
             self.discard_pile.append(card)
             self._log(f"{p.name} cortou com {card.label()} (slot {slot}).")
@@ -1004,6 +1024,7 @@ class WellingtonGame:
                 return
 
             p.cards[replace_slot] = drawn
+            p.known_slots.add(replace_slot)
             self._forget_human_knowledge(idx, replace_slot)
             self.drawn_card = None
             self.discard_pile.append(old)
@@ -1022,12 +1043,21 @@ class WellingtonGame:
         self.bot_visual[idx] = {"side": "drawn", "slot_discarded": None, "clear_on": None}
 
         candidate_slots = [s for s, c in enumerate(p.cards) if c is not None]
+        known_slots = [s for s in candidate_slots if s in p.known_slots]
+        unknown_slots = [s for s in candidate_slots if s not in p.known_slots]
         replace_slot = None
-        if candidate_slots:
-            worst_slot = max(candidate_slots, key=lambda s: p.cards[s].points)
-            worst_card = p.cards[worst_slot]
-            if worst_card is not None and drawn.points < worst_card.points:
-                replace_slot = worst_slot
+
+        # Heuristica: bot decide com base no que conhece das proprias cartas.
+        if known_slots:
+            worst_known_slot = max(known_slots, key=lambda s: p.cards[s].points)
+            worst_known_card = p.cards[worst_known_slot]
+            if worst_known_card is not None and drawn.points < worst_known_card.points:
+                replace_slot = worst_known_slot
+            elif drawn.points <= 2 and unknown_slots:
+                replace_slot = self.random.choice(unknown_slots)
+        else:
+            if unknown_slots and drawn.points <= 4:
+                replace_slot = self.random.choice(unknown_slots)
 
         self.pending_bot_turn = {"player": idx, "replace_slot": replace_slot}
         self._log(f"{p.name} comprou uma carta.")
