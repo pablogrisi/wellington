@@ -1,0 +1,285 @@
+{
+  "players": [
+    {
+      "name": "Voce",
+      "is_bot": false,
+      "cards": [
+        {
+          "rank": "8",
+          "suit": "D"
+        },
+        {
+          "rank": "3",
+          "suit": "D"
+        },
+        {
+          "rank": "A",
+          "suit": "D"
+        },
+        {
+          "rank": "7",
+          "suit": "C"
+        }
+      ],
+      "known_slots": [
+        2,
+        3
+      ],
+      "locked": false
+    },
+    {
+      "name": "Bot 1",
+      "is_bot": true,
+      "cards": [
+        {
+          "rank": "9",
+          "suit": "D"
+        },
+        {
+          "rank": "8",
+          "suit": "C"
+        },
+        {
+          "rank": "5",
+          "suit": "D"
+        },
+        {
+          "rank": "A",
+          "suit": "S"
+        }
+      ],
+      "known_slots": [
+        2,
+        3
+      ],
+      "locked": false
+    },
+    {
+      "name": "Bot 2",
+      "is_bot": true,
+      "cards": [
+        {
+          "rank": "K",
+          "suit": "C"
+        },
+        {
+          "rank": "J",
+          "suit": "S"
+        },
+        {
+          "rank": "5",
+          "suit": "H"
+        },
+        {
+          "rank": "A",
+          "suit": "H"
+        }
+      ],
+      "known_slots": [
+        2,
+        3
+      ],
+      "locked": false
+    },
+    {
+      "name": "Bot 3",
+      "is_bot": true,
+      "cards": [
+        {
+          "rank": "4",
+          "suit": "H"
+        },
+        {
+          "rank": "4",
+          "suit": "C"
+        },
+        {
+          "rank": "Q",
+          "suit": "C"
+        },
+        {
+          "rank": "Q",
+          "suit": "H"
+        }
+      ],
+      "known_slots": [
+        2,
+        3
+      ],
+      "locked": false
+    }
+  ],
+  "draw_pile": [
+    {
+      "rank": "A",
+      "suit": "C"
+    },
+    {
+      "rank": "10",
+      "suit": "C"
+    },
+    {
+      "rank": "7",
+      "suit": "H"
+    },
+    {
+      "rank": "9",
+      "suit": "H"
+    },
+    {
+      "rank": "3",
+      "suit": "H"
+    },
+    {
+      "rank": "J",
+      "suit": "D"
+    },
+    {
+      "rank": "K",
+      "suit": "H"
+    },
+    {
+      "rank": "K",
+      "suit": "S"
+    },
+    {
+      "rank": "5",
+      "suit": "C"
+    },
+    {
+      "rank": "Q",
+      "suit": "D"
+    },
+    {
+      "rank": "6",
+      "suit": "C"
+    },
+    {
+      "rank": "2",
+      "suit": "H"
+    },
+    {
+      "rank": "9",
+      "suit": "S"
+    },
+    {
+      "rank": "Q",
+      "suit": "S"
+    },
+    {
+      "rank": "2",
+      "suit": "S"
+    },
+    {
+      "rank": "6",
+      "suit": "S"
+    },
+    {
+      "rank": "9",
+      "suit": "C"
+    },
+    {
+      "rank": "J",
+      "suit": "C"
+    },
+    {
+      "rank": "JK",
+      "suit": null
+    },
+    {
+      "rank": "6",
+      "suit": "H"
+    },
+    {
+      "rank": "5",
+      "suit": "S"
+    },
+    {
+      "rank": "4",
+      "suit": "D"
+    },
+    {
+      "rank": "8",
+      "suit": "S"
+    },
+    {
+      "rank": "10",
+      "suit": "S"
+    },
+    {
+      "rank": "JK",
+      "suit": null
+    },
+    {
+      "rank": "10",
+      "suit": "D"
+    },
+    {
+      "rank": "J",
+      "suit": "H"
+    },
+    {
+      "rank": "6",
+      "suit": "D"
+    },
+    {
+      "rank": "4",
+      "suit": "S"
+    },
+    {
+      "rank": "7",
+      "suit": "S"
+    },
+    {
+      "rank": "10",
+      "suit": "H"
+    },
+    {
+      "rank": "8",
+      "suit": "H"
+    },
+    {
+      "rank": "3",
+      "suit": "C"
+    },
+    {
+      "rank": "7",
+      "suit": "D"
+    },
+    {
+      "rank": "2",
+      "suit": "C"
+    },
+    {
+      "rank": "K",
+      "suit": "D"
+    },
+    {
+      "rank": "3",
+      "suit": "S"
+    }
+  ],
+  "discard_pile": [
+    {
+      "rank": "2",
+      "suit": "D"
+    }
+  ],
+  "current_player": 0,
+  "drawn_card": null,
+  "wellington_caller": null,
+  "game_over": false,
+  "pending_ability": null,
+  "pending_ability8_preview": null,
+  "pending_human_cut": false,
+  "human_cut_available_until_draw": false,
+  "pending_human_wellington_window": false,
+  "paused": false,
+  "wellington_waiting_return": false,
+  "pending_bot_turn": null,
+  "bot_visual": {},
+  "human_known_other": [],
+  "log": [
+    "Nova partida iniciada."
+  ]
+}
