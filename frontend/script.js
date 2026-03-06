@@ -30,6 +30,7 @@ const logListEl = document.getElementById("log-list");
 const pauseBtn = document.getElementById("pause-btn");
 const resumeBtn = document.getElementById("resume-btn");
 const newGameBtn = document.getElementById("new-game-btn");
+const undoBtn = document.getElementById("undo-btn");
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, {
@@ -177,6 +178,7 @@ function renderStatus() {
 
   if (pauseBtn) pauseBtn.disabled = Boolean(state.paused);
   if (resumeBtn) resumeBtn.disabled = !state.paused;
+  if (undoBtn) undoBtn.disabled = !state.can_undo;
 }
 
 function parseCardText(text) {
@@ -311,6 +313,13 @@ function renderTable() {
 
   tableEl.appendChild(board);
 
+  const wellingtonBtn = document.createElement("button");
+  wellingtonBtn.className = "table-wellington-btn";
+  wellingtonBtn.textContent = "CHAMAR WELLINGTON";
+  wellingtonBtn.disabled = !state.actions.can_call_wellington || state.paused;
+  wellingtonBtn.addEventListener("click", () => action("/api/action/call-wellington"));
+  tableEl.appendChild(wellingtonBtn);
+
   if (showWellingtonFlash) {
     const flash = document.createElement("div");
     flash.className = "wellington-call-flash";
@@ -425,6 +434,7 @@ function applyAbilityCardInteraction(cardEl, playerId, slot, isEmpty) {
   }
 
   if (pending.rank === "6") {
+    if (playerId === 0) return;
     cardEl.classList.add("clickable-card");
     cardEl.addEventListener("click", async () => {
       await action("/api/action/ability", { data: { target_player: playerId, slot } });
@@ -463,7 +473,7 @@ function applyAbility7CardInteraction(cardEl, playerId, slot) {
     cardEl.classList.add("selected-card");
   }
 
-  cardEl.addEventListener("click", () => {
+  cardEl.addEventListener("click", async () => {
     if (isOwn) {
       selected.ownSlot = selected.ownSlot === slot ? null : slot;
       if (selected.ownSlot === null) {
@@ -471,6 +481,16 @@ function applyAbility7CardInteraction(cardEl, playerId, slot) {
         selected.targetSlot = null;
       }
       render();
+      if (selected.ownSlot === null || selected.targetPlayer === null || selected.targetSlot === null) {
+        return;
+      }
+      await action("/api/action/ability", {
+        data: {
+          own_slot: selected.ownSlot,
+          target_player: selected.targetPlayer,
+          target_slot: selected.targetSlot,
+        },
+      });
       return;
     }
 
@@ -478,6 +498,16 @@ function applyAbility7CardInteraction(cardEl, playerId, slot) {
       selected.targetPlayer === playerId && selected.targetSlot === slot ? null : playerId;
     selected.targetSlot = selected.targetPlayer === null ? null : slot;
     render();
+    if (selected.ownSlot === null || selected.targetPlayer === null || selected.targetSlot === null) {
+      return;
+    }
+    await action("/api/action/ability", {
+      data: {
+        own_slot: selected.ownSlot,
+        target_player: selected.targetPlayer,
+        target_slot: selected.targetSlot,
+      },
+    });
   });
 }
 
@@ -541,6 +571,7 @@ function applyAbility8CardInteraction(cardEl, playerId, slot) {
 function applyCutCardInteraction(cardEl, playerId, slot, isEmpty) {
   if (state.paused) return;
   if (isEmpty) return;
+  if (state.pending_ability) return;
 
   // Fase 2 do corte com carta de outro: clique em carta sua para enviar.
   if (state.actions?.can_send_cut_other_card) {
@@ -584,6 +615,7 @@ function applyCutCardInteraction(cardEl, playerId, slot, isEmpty) {
 
 function applyReplaceCardInteraction(cardEl, playerId, slot, isEmpty) {
   if (state.paused) return;
+  if (state.pending_ability) return;
   if (!state.actions?.can_discard_drawn || state.current_player !== 0 || playerId !== 0 || isEmpty) return;
 
   cardEl.classList.add("clickable-card");
@@ -620,7 +652,7 @@ function buildCenterPileElement() {
     <div class="pile-label">Descarte</div>
     <div class="pile-card discard ${state.actions?.can_cut ? "cut-drop-target" : ""} ${recentActorId !== null ? "recent-play" : ""}">${top}</div>
   `;
-  if (!state.paused && (state.actions?.can_cut || state.actions?.can_discard_drawn)) {
+  if (!state.paused && !state.pending_ability && (state.actions?.can_cut || state.actions?.can_discard_drawn)) {
     const dropTarget = discardEl.querySelector(".pile-card.discard");
     if (state.actions?.can_discard_drawn && !state.actions?.can_cut) {
       dropTarget.classList.add("cut-drop-target");
@@ -680,7 +712,6 @@ function renderControls() {
 
   base.appendChild(makeBtn("Comprar carta", () => action("/api/action/draw"), !state.actions.can_draw));
   base.appendChild(makeBtn("Descartar comprada", () => action("/api/action/discard-drawn"), !state.actions.can_discard_drawn));
-  base.appendChild(makeBtn("Chamar Wellington", () => action("/api/action/call-wellington"), !state.actions.can_call_wellington, "danger"));
   controlsEl.appendChild(base);
 
   if (state.actions?.can_send_cut_other_card) {
@@ -789,7 +820,7 @@ function renderControls() {
     }
 
     if (ab.rank === "6") {
-      row.appendChild(makeText("Habilidade 6: clique em qualquer carta para revelar."));
+      row.appendChild(makeText("Habilidade 6: clique em uma carta de outro jogador para revelar."));
     }
 
     if (ab.rank === "7") {
@@ -797,22 +828,7 @@ function renderControls() {
       const own = sel.ownSlot === null ? "-" : `slot ${sel.ownSlot}`;
       const target =
         sel.targetPlayer === null ? "-" : `${state.players[sel.targetPlayer].name} slot ${sel.targetSlot}`;
-      row.appendChild(makeText(`Habilidade 7: clique em 1 carta sua e 1 de outro jogador (nao travado). Selecionado: sua ${own} / alvo ${target}.`));
-      const ready = sel.ownSlot !== null && sel.targetPlayer !== null && sel.targetSlot !== null;
-      row.appendChild(
-        makeBtn(
-          "Trocar cartas selecionadas",
-          () => action("/api/action/ability", {
-            data: {
-              own_slot: sel.ownSlot,
-              target_player: sel.targetPlayer,
-              target_slot: sel.targetSlot,
-            },
-          }),
-          !ready,
-          "primary"
-        )
-      );
+      row.appendChild(makeText(`Habilidade 7: clique em 1 carta sua e 1 de outro jogador (nao travado). A troca acontece automaticamente. Selecionado: sua ${own} / alvo ${target}.`));
     }
 
     if (ab.rank === "8") {
@@ -963,7 +979,7 @@ function makeText(txt) {
 newGameBtn.addEventListener("click", () => action("/api/new-game"));
 pauseBtn.addEventListener("click", () => action("/api/pause"));
 resumeBtn.addEventListener("click", () => action("/api/resume"));
+if (undoBtn) undoBtn.addEventListener("click", () => action("/api/action/undo"));
 
 loadState().catch(toastError);
-
 

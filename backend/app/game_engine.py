@@ -212,6 +212,8 @@ class WellingtonGame:
         while not self.game_over:
             if self.paused:
                 return
+            if self.pending_ability is not None:
+                return
             if self.pending_human_cut_other_transfer is not None:
                 return
             if self.pending_bot_cut:
@@ -232,6 +234,8 @@ class WellingtonGame:
 
     def can_bot_step(self) -> bool:
         self._sanitize_human_cut_state()
+        if self.pending_ability is not None:
+            return False
         if self.pending_human_cut_other_transfer is not None:
             return False
         if self.pending_bot_cut:
@@ -533,7 +537,16 @@ class WellingtonGame:
 
         self.pending_ability8_preview = None
         self.pending_ability = None
-        self._finish_turn_after_play(player_idx=0)
+        if self.pending_discard_resolution is not None:
+            self.pending_discard_resolution["ability_resolved"] = True
+
+        # Apos resolver a habilidade, o humano pode cortar imediatamente em sequencia.
+        if self.pending_discard_resolution is not None and self._check_human_cut_opportunity(0):
+            self.pending_human_cut = True
+            self.human_cut_available_until_draw = False
+            return
+
+        self._process_pending_discard_flow()
 
     def public_state(self) -> Dict[str, Any]:
         self._sanitize_human_cut_state()
@@ -690,7 +703,11 @@ class WellingtonGame:
         player_idx = int(ctx["player"])
         discarded_rank = str(ctx["rank"])
 
-        if discarded_rank in {"5", "6", "7", "8"} and not self.players[player_idx].locked:
+        if (
+            discarded_rank in {"5", "6", "7", "8"}
+            and not self.players[player_idx].locked
+            and not bool(ctx.get("ability_resolved", False))
+        ):
             if player_idx == 0:
                 self.pending_ability = {"player": 0, "rank": discarded_rank}
                 self._log(f"Habilidade da carta {discarded_rank} pendente para voce.")
@@ -703,16 +720,30 @@ class WellingtonGame:
         self.pending_discard_resolution = {
             "player": player_idx,
             "rank": card.rank,
+            "ability_resolved": False,
         }
 
-        has_human_cut_opportunity = self._check_human_cut_opportunity(player_idx)
-        if has_human_cut_opportunity:
-            self.pending_human_cut = True
-            # Se outro jogador descartou, o humano pode cortar ate comprar.
-            # Se foi o proprio descarte do humano, resolve corte e segue o fluxo da vez.
-            self.human_cut_available_until_draw = player_idx != 0
-        else:
+        is_human_special_discard = (
+            player_idx == 0
+            and card.rank in {"5", "6", "7", "8"}
+            and not self.players[0].locked
+        )
+        if is_human_special_discard:
+            # Habilidade especial do humano abre imediatamente apos descartar.
             self.pending_human_cut = False
+            self.human_cut_available_until_draw = False
+            self.pending_ability8_preview = None
+            self.pending_ability = {"player": 0, "rank": card.rank}
+            self._log(f"Habilidade da carta {card.rank} pendente para voce.")
+        else:
+            has_human_cut_opportunity = self._check_human_cut_opportunity(player_idx)
+            if has_human_cut_opportunity:
+                self.pending_human_cut = True
+                # Se outro jogador descartou, o humano pode cortar ate comprar.
+                # Se foi o proprio descarte do humano, resolve corte e segue o fluxo da vez.
+                self.human_cut_available_until_draw = player_idx != 0
+            else:
+                self.pending_human_cut = False
 
         self.pending_bot_cut = self._has_bot_cut_candidates(player_idx)
         if self.pending_bot_cut:
@@ -796,6 +827,8 @@ class WellingtonGame:
     def _ability_6(self, player_idx: int, target_idx: int, slot: int) -> None:
         if target_idx < 0 or target_idx >= len(self.players):
             raise ValueError("Jogador alvo invalido.")
+        if target_idx == player_idx:
+            raise ValueError("Habilidade 6 so permite ver carta de outro jogador.")
         target = self.players[target_idx]
         self._validate_slot(target, slot)
         card = target.cards[slot]
@@ -926,7 +959,10 @@ class WellingtonGame:
             self._ability_5(player_idx, slot)
             return
         if rank == "6":
-            t = self.random.choice([i for i in range(len(self.players)) if not self.players[i].locked])
+            candidates = [i for i in range(len(self.players)) if i != player_idx and not self.players[i].locked]
+            if not candidates:
+                return
+            t = self.random.choice(candidates)
             t_slots = [i for i, c in enumerate(self.players[t].cards) if c is not None]
             if not t_slots:
                 return

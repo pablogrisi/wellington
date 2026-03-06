@@ -3,6 +3,8 @@ import os
 import tempfile
 import threading
 import time
+from collections import deque
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -28,6 +30,14 @@ app.add_middleware(
 GAME = WellingtonGame()
 STATE_FILE = Path(__file__).resolve().parents[1] / "game_state.json"
 STATE_LOCK = threading.Lock()
+UNDO_LIMIT = 60
+UNDO_STACK: deque[Dict[str, Any]] = deque(maxlen=UNDO_LIMIT)
+
+
+def build_public_state() -> Dict[str, Any]:
+    payload = GAME.public_state()
+    payload["can_undo"] = len(UNDO_STACK) > 0
+    return payload
 
 
 def save_game_state() -> None:
@@ -68,11 +78,13 @@ def load_game_state_or_new() -> None:
         try:
             data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
             GAME.load_state_dict(data)
+            UNDO_STACK.clear()
             return
         except Exception:
             pass
 
     GAME.new_game()
+    UNDO_STACK.clear()
     save_game_state()
 
 
@@ -97,13 +109,16 @@ class CutOtherPayload(BaseModel):
     give_slot: Optional[int] = None
 
 
-def safe_action(fn, allow_when_paused: bool = False):
+def safe_action(fn, allow_when_paused: bool = False, record_undo: bool = True):
     try:
         if GAME.paused and not allow_when_paused:
             raise ValueError("A partida esta pausada. Clique em Retomar para continuar.")
+        before_state = deepcopy(GAME.to_state_dict()) if record_undo else None
         fn()
+        if record_undo and before_state is not None:
+            UNDO_STACK.append(before_state)
         save_game_state()
-        return GAME.public_state()
+        return build_public_state()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -112,14 +127,15 @@ def safe_action(fn, allow_when_paused: bool = False):
 
 @app.get("/api/state")
 def get_state():
-    return GAME.public_state()
+    return build_public_state()
 
 
 @app.post("/api/new-game")
 def new_game():
+    UNDO_STACK.clear()
     GAME.new_game()
     save_game_state()
-    return GAME.public_state()
+    return build_public_state()
 
 
 @app.post("/api/bot-step")
@@ -198,6 +214,16 @@ def action_cut_other(payload: CutOtherPayload):
 @app.post("/api/action/skip-cut")
 def action_skip_cut():
     return safe_action(GAME.action_skip_cut)
+
+
+@app.post("/api/action/undo")
+def action_undo():
+    if not UNDO_STACK:
+        raise HTTPException(status_code=400, detail="Nao ha acao para desfazer.")
+    snapshot = UNDO_STACK.pop()
+    GAME.load_state_dict(snapshot)
+    save_game_state()
+    return build_public_state()
 
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"

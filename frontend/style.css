@@ -287,8 +287,8 @@ button.danger {
 }
 
 .card.selected-card {
-  border-color: #1f6feb;
-  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.28);
+  border-color: #2f9e44;
+  box-shadow: 0 0 0 3px rgba(47, 158, 68, 0.28);
 }
 
 .card.disabled-card {
@@ -467,6 +467,26 @@ small { color: var(--muted); }
   animation: wellington-flash 1.4s ease-out forwards;
 }
 
+.table-wellington-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 18px;
+  z-index: 6;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #f0b6b6;
+  background: #fff0f0;
+  color: #9f1e1e;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.table-wellington-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .cut-call-flash {
   position: absolute;
   inset: 50% auto auto 50%;
@@ -531,6 +551,14 @@ small { color: var(--muted); }
 
   .table {
     padding: 10px;
+  }
+
+  .table-wellington-btn {
+    right: 10px;
+    bottom: 10px;
+    padding: 9px 11px;
+    font-size: 11px;
+    border-radius: 10px;
   }
 
   .table-board {
@@ -656,6 +684,14 @@ small { color: var(--muted); }
 
   .table {
     padding: 8px;
+  }
+
+  .table-wellington-btn {
+    right: 8px;
+    bottom: 8px;
+    padding: 8px 9px;
+    font-size: 10px;
+    letter-spacing: 0;
   }
 
   .table-board {
