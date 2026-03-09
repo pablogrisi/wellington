@@ -1,7 +1,9 @@
 ﻿import random
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+logger = logging.getLogger("wellington")
 
 RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 SUITS = ["S", "H", "D", "C"]

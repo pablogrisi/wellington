@@ -127,6 +127,7 @@ def safe_action(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
+            logger.exception(f"Erro interno no servidor: {exc}")
             raise HTTPException(status_code=500, detail=f"Erro interno no servidor: {exc}") from exc
 
 
