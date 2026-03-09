@@ -621,7 +621,6 @@ class WellingtonGame:
             "pending_ability": ability,
             "pending_ability8_preview": self.pending_ability8_preview,
             "pending_bot_turn": self.pending_bot_turn,
-            "can_bot_step": self.can_bot_step(),
             "bot_delay_ms": 3000,
             "bot_cut_delay_ms": 2500,
             "players": players_payload,
@@ -636,6 +635,7 @@ class WellingtonGame:
                 "can_cut": self._can_human_cut_now(),
                 "can_send_cut_other_card": self.pending_human_cut_other_transfer is not None,
                 "send_cut_other_slots": self._human_send_cut_other_slots(),
+                "can_bot_step": self.can_bot_step(),
             },
         }
 
