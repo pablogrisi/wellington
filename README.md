@@ -24,6 +24,12 @@ MVP web do jogo de cartas Wellington (1 humano + 3 bots).
   - corte normal (com sua carta)
   - corte usando carta de outro jogador (troca por uma sua)
   - corte errado: compra 2 cartas cegas
+  - em corte com carta de outro jogador, o fluxo tem 2 etapas:
+    1) escolher a carta do outro jogador para cortar
+    2) escolher qual carta sua sera enviada para ele
+  - cartas jogadas por corte NAO ativam habilidade (5, 6, 7, 8)
+  - se voce descartar uma carta com habilidade na sua vez, a habilidade deve ser resolvida antes de novos cortes
+  - depois da habilidade resolvida, cortes consecutivos voltam a ser permitidos normalmente
 - Chamada de Wellington:
   - quem chama fica travado (nao mexe mais nas cartas e nao corta)
   - o jogo termina quando a vez volta para quem chamou

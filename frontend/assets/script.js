@@ -555,7 +555,15 @@ document.addEventListener('click', (e) => {
     action('/api/action/cut-self', { slot: slotIndex });
   } else if (phase === 'cut-other-transfer' && isHumanCard) {
     // Player needs to give a card when cutting another player's card
-    action('/api/action/send-cut-other-card', { slot: slotIndex });
+    if (!state.pending_human_cut_other_transfer) {
+      showToast('Transferencia de corte nao encontrada. Tente novamente.');
+      return;
+    }
+    action('/api/action/cut-other', {
+      target_player: state.pending_human_cut_other_transfer.target_player,
+      target_slot: state.pending_human_cut_other_transfer.target_slot,
+      give_slot: slotIndex,
+    });
   } else if (phase === 'ability' && isHumanCard && state.pending_ability) {
     // Handle ability 5 (view own card)
     const rank = state.pending_ability.rank;
