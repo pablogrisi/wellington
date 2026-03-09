@@ -560,7 +560,7 @@ document.addEventListener('click', (e) => {
     // Handle ability 5 (view own card)
     const rank = state.pending_ability.rank;
     if (rank === '5') {
-      action('/api/action/ability', { slot: slotIndex });
+      action('/api/action/ability', { data: { slot: slotIndex } });
     } else if (rank === '7') {
       // Ability 7: first click own card
       if (abilitySelection.own_slot === null) {
@@ -604,16 +604,20 @@ document.addEventListener('click', (e) => {
     if (rank === '6') {
       // Ability 6: view opponent's card
       action('/api/action/ability', { 
-        target_player: targetPlayer, 
-        slot: slotIndex 
+        data: {
+          target_player: targetPlayer, 
+          slot: slotIndex
+        }
       });
     } else if (rank === '7') {
       // Ability 7: swap without seeing
       if (abilitySelection.own_slot !== null) {
         action('/api/action/ability', { 
-          own_slot: abilitySelection.own_slot,
-          target_player: targetPlayer, 
-          target_slot: slotIndex 
+          data: {
+            own_slot: abilitySelection.own_slot,
+            target_player: targetPlayer, 
+            target_slot: slotIndex
+          }
         });
         abilitySelection = { own_slot: null, target_player: null, target_slot: null };
       } else {
@@ -623,10 +627,12 @@ document.addEventListener('click', (e) => {
       // Ability 8: preview both cards
       if (abilitySelection.own_slot !== null) {
         action('/api/action/ability', { 
-          preview: true,
-          own_slot: abilitySelection.own_slot,
-          target_player: targetPlayer, 
-          target_slot: slotIndex 
+          data: {
+            preview: true,
+            own_slot: abilitySelection.own_slot,
+            target_player: targetPlayer, 
+            target_slot: slotIndex
+          }
         });
         abilitySelection = { own_slot: null, target_player: null, target_slot: null };
       } else {
