@@ -66,6 +66,7 @@ class WellingtonGame:
         self.pending_human_cut_other_transfer: Optional[Dict[str, Any]] = None
         self.pending_discard_resolution: Optional[Dict[str, Any]] = None
         self.pending_bot_cut: bool = False
+        self.pending_bot_cut_action: Optional[Dict[str, Any]] = None
         self.human_cut_available_until_draw: bool = False
         self.pending_human_wellington_window: bool = False
         self.paused: bool = False
@@ -264,8 +265,10 @@ class WellingtonGame:
         if self.pending_bot_cut:
             if self.pending_discard_resolution is not None:
                 self._resolve_bot_cuts(int(self.pending_discard_resolution["player"]))
-            self.pending_bot_cut = False
-            self._process_pending_discard_flow()
+            # Só limpa pending_bot_cut se não há mais cortes agendados
+            if not self.pending_bot_cut_action:
+                self.pending_bot_cut = False
+                self._process_pending_discard_flow()
             return True
         self._bot_turn(self.current_player)
         return True
@@ -1037,6 +1040,42 @@ class WellingtonGame:
         return self.discard_pile[-1] if self.discard_pile else None
 
     def _resolve_bot_cuts(self, discarder_idx: int) -> None:
+        """Processa UM corte de bot por vez com visual state."""
+        top = self._top_discard()
+        if top is None:
+            return
+
+        # Se já tem uma ação de corte pendente, executar ela agora
+        if self.pending_bot_cut_action:
+            action = self.pending_bot_cut_action
+            idx = action["player_idx"]
+            slot = action["slot"]
+            p = self.players[idx]
+            card = p.cards[slot]
+            
+            # Executar o corte
+            p.cards[slot] = None
+            p.known_slots.discard(slot)
+            self._forget_human_knowledge(idx, slot)
+            self.discard_pile.append(card)
+            self._log(f"{p.name} cortou com {card.label()} (slot {slot}).")
+            
+            # Limpar a ação pendente
+            self.pending_bot_cut_action = None
+            
+            # Limpar o visual state
+            if idx in self.bot_visual:
+                self.bot_visual[idx] = {"clear_on": "next_bot_step"}
+            
+            # Verificar se há mais cortes possíveis
+            self._check_and_queue_next_cut(discarder_idx)
+            return
+        
+        # Verificar se há algum bot que pode cortar
+        self._check_and_queue_next_cut(discarder_idx)
+
+    def _check_and_queue_next_cut(self, discarder_idx: int) -> None:
+        """Verifica se há bots que podem cortar e agenda o próximo."""
         top = self._top_discard()
         if top is None:
             return
@@ -1045,6 +1084,7 @@ class WellingtonGame:
             (discarder_idx + offset) % len(self.players)
             for offset in range(1, len(self.players))
         ]
+        
         for idx in order:
             if idx == 0:
                 continue
@@ -1061,14 +1101,26 @@ class WellingtonGame:
             if self.random.random() > 0.60:
                 continue
 
+            # Encontrou um bot que vai cortar - agendar a ação visual
             slot = self.random.choice(matching_known)
             card = p.cards[slot]
-            p.cards[slot] = None
-            p.known_slots.discard(slot)
-            self._forget_human_knowledge(idx, slot)
-            self.discard_pile.append(card)
-            self._log(f"{p.name} cortou com {card.label()} (slot {slot}).")
-            top = card
+            
+            self.pending_bot_cut_action = {
+                "player_idx": idx,
+                "slot": slot,
+                "card_label": card.label()
+            }
+            
+            # Definir bot_visual para mostrar "CORTOU" no slot
+            self.bot_visual[idx] = {
+                "mode": "cut",
+                "slot": slot,
+                "player_name": p.name,
+                "clear_on": "after_cut"
+            }
+            
+            logger.info(f"DEBUG: Agendou corte visual de {p.name} no slot {slot}")
+            return  # Processar apenas UM corte por vez
 
     def _check_human_cut_opportunity(self, discarder_idx: int) -> bool:
         if self.players[0].locked:

@@ -263,6 +263,13 @@ function renderDiscardMarkerSlot(index = -1, extraClass = '') {
   </div>`;
 }
 
+function renderCutMarkerSlot(index = -1) {
+  const dataSlot = index >= 0 ? `data-slot="${index}"` : '';
+  return `<div class="card-slot cut-marker" ${dataSlot}>
+    <div class="cut-marker-label">CORTOU</div>
+  </div>`;
+}
+
 function renderBotDrawnSlot(discarded = false) {
   if (discarded) {
     return renderDiscardMarkerSlot(-1, 'bot-drawn-extra');
@@ -273,7 +280,55 @@ function renderBotDrawnSlot(discarded = false) {
 }
 
 function getBotVisualAnimation(playerId, visual) {
-  if (!visual || !visual.side) {
+  if (!visual) {
+    delete botVisualAnimations[playerId];
+    return null;
+  }
+
+  // Handle cut mode
+  if (visual.mode === 'cut') {
+    const visualKey = `cut:${visual.slot}:${visual.player_name}`;
+    const current = botVisualAnimations[playerId];
+    if (current && current.visualKey === visualKey) {
+      if (current.until && Date.now() >= current.until) {
+        delete botVisualAnimations[playerId];
+        return null;
+      }
+      return current;
+    }
+
+    const anim = {
+      mode: 'cut',
+      slot: visual.slot,
+      player_name: visual.player_name,
+      visualKey,
+      until: Date.now() + 1500,
+    };
+    botVisualAnimations[playerId] = anim;
+    
+    // Show toast message
+    showToast(`${visual.player_name} cortou!`);
+    
+    setTimeout(() => {
+      if (botVisualAnimations[playerId]?.visualKey === visualKey) {
+        delete botVisualAnimations[playerId];
+        render();
+        // Call bot-step after animation to execute the cut
+        if (currentState?.phase === 'cut') {
+          fetch('/api/bot-step/', { method: 'POST', credentials: 'include' })
+            .then(r => r.json())
+            .then(data => {
+              currentState = data;
+              render();
+            });
+        }
+      }
+    }, 1510);
+    return anim;
+  }
+
+  // Original side-based logic
+  if (!visual.side) {
     delete botVisualAnimations[playerId];
     return null;
   }
@@ -408,6 +463,11 @@ function renderPlayers() {
       
       if (player.is_bot && botAnimActive && botAnim.mode === 'replace-discard' && idx === botAnim.slot) {
         cardsHtml += renderDiscardMarkerSlot(idx);
+        return;
+      }
+
+      if (player.is_bot && botAnimActive && botAnim.mode === 'cut' && idx === botAnim.slot) {
+        cardsHtml += renderCutMarkerSlot(idx);
         return;
       }
 

@@ -220,6 +220,25 @@ body {
   text-transform: uppercase;
 }
 
+.card-slot.cut-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(36, 90, 150, 0.25);
+  border: 2px dashed rgba(145, 200, 255, 0.9);
+  border-radius: var(--radius-card);
+}
+
+.cut-marker-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #d6ebff;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 @keyframes botDrawPop {
   from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
