@@ -13,6 +13,8 @@ let cutAutoPassTimer = null;
 let wellingtonWindowTimer = null;
 let logVisible = false;
 let phase = null;
+let wellingtonBannerTimer = null;
+let lastWellingtonCaller = null;
 
 // Cut countdown timer
 let cutCountdown = 3;
@@ -177,6 +179,7 @@ function render() {
   renderControls();
   renderTurnIndicator();
   renderWellingtonButton();
+  renderWellingtonAnnouncement();
   renderCutCountdown();
   renderAbilityPanel();
   renderLog();
@@ -276,7 +279,7 @@ function renderPlayers() {
     if (playerEl.score) {
       if (state.game_over && state.scores) {
         const playerScore = state.scores.find(s => s.player === playerId);
-        playerEl.score.textContent = playerScore ? playerScore.score : '?';
+        playerEl.score.textContent = playerScore ? `${playerScore.score} pontos` : '?';
       } else {
         playerEl.score.textContent = '?';
       }
@@ -332,6 +335,40 @@ function renderPlayers() {
     
     playerEl.grid.innerHTML = cardsHtml;
   }
+}
+
+function showPhaseBanner(message) {
+  if (!els.phaseBanner) return;
+
+  if (wellingtonBannerTimer) {
+    clearTimeout(wellingtonBannerTimer);
+    wellingtonBannerTimer = null;
+  }
+
+  els.phaseBanner.textContent = message;
+  els.phaseBanner.classList.add('show');
+
+  wellingtonBannerTimer = setTimeout(() => {
+    els.phaseBanner.classList.remove('show');
+    wellingtonBannerTimer = null;
+  }, 2300);
+}
+
+function renderWellingtonAnnouncement() {
+  if (!state || !state.players) return;
+
+  const caller = state.wellington_caller;
+  if (caller === null || caller === undefined) {
+    lastWellingtonCaller = null;
+    return;
+  }
+
+  if (lastWellingtonCaller === caller) return;
+
+  const callerPlayer = state.players[caller];
+  const callerName = callerPlayer?.name || `Jogador ${caller}`;
+  showPhaseBanner(`${callerName} pediu WELLIGTON!`);
+  lastWellingtonCaller = caller;
 }
 
 function renderDeck() {

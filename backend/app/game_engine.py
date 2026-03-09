@@ -788,6 +788,16 @@ class WellingtonGame:
         self.pending_human_wellington_window = False
         logger.info(f"DEBUG _advance_turn: after advance - current_player={self.current_player}, is_bot={self.players[self.current_player].is_bot}")
 
+        current = self.players[self.current_player]
+        current_has_cards = any(c is not None for c in current.cards)
+        if self.wellington_caller is None and not current.locked and not current_has_cards:
+            self.wellington_caller = self.current_player
+            self.wellington_waiting_return = True
+            current.locked = True
+            self._log(f"{current.name} chamou Wellington automaticamente (sem cartas na vez).")
+            self._advance_turn()
+            return
+
         if self.players[self.current_player].is_bot:
             logger.info("DEBUG _advance_turn: next player is bot, returning (frontend will call bot-step)")
             return
