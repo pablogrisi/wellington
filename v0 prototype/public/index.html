@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -6,21 +6,9 @@
   <title>Welligton — Jogo de Cartas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-<!-- Player Name Gate -->
-<div id="player-gate" style="display: none;">
-  <div class="gate-content">
-    <h1 class="gate-title">WELLIGTON</h1>
-    <form id="player-gate-form">
-      <input type="text" id="player-name-input" placeholder="Seu nome" maxlength="24" required />
-      <button type="submit" class="btn btn-primary">Começar</button>
-      <div id="player-gate-error" class="gate-error"></div>
-    </form>
-  </div>
-</div>
 
 <!-- ═══════════════ GAME TABLE ═══════════════ -->
 <div id="game-table">
@@ -32,11 +20,10 @@
   <div id="top-zone">
     <div class="player-area" id="player-top">
       <div class="player-label">
-        <span class="turn-dot"></span>
-        <span id="name-top">Bot Alfa</span>
+        <span>Bot Alfa</span>
         <span class="score-badge" id="score-top">?</span>
       </div>
-      <span class="player-status" id="status-top"></span>
+      <span class="player-status" id="status-top">WELLIGTON LOCKED</span>
       <div class="card-grid" id="grid-top"></div>
     </div>
   </div>
@@ -47,8 +34,7 @@
     <!-- Left Bot -->
     <div class="side-bot player-area" id="player-left">
       <div class="player-label">
-        <span class="turn-dot"></span>
-        <span id="name-left">Bot Beta</span>
+        <span>Bot Beta</span>
         <span class="score-badge" id="score-left">?</span>
       </div>
       <span class="player-status" id="status-left"></span>
@@ -96,8 +82,7 @@
     <!-- Right Bot -->
     <div class="side-bot player-area" id="player-right">
       <div class="player-label">
-        <span class="turn-dot"></span>
-        <span id="name-right">Bot Gama</span>
+        <span>Bot Gama</span>
         <span class="score-badge" id="score-right">?</span>
       </div>
       <span class="player-status" id="status-right"></span>
@@ -108,17 +93,17 @@
 
   <!-- ── BOTTOM ZONE: Human Player ── -->
   <div id="bottom-zone">
-    <div class="player-area human" id="player-human">
+    <div class="player-area human active-turn" id="player-human">
       <div class="player-label human">
         <span class="turn-dot"></span>
-        <span id="name-human">Você</span>
+        <span>Você</span>
         <span class="score-badge" id="score-human">?</span>
       </div>
       <span class="player-status" id="status-human"></span>
       <div class="card-grid" id="grid-human"></div>
     </div>
 
-    <!-- Action Panel -->
+    <!-- Action Panel: only Welligton button remains -->
     <div id="action-panel">
       <div id="action-hint"></div>
       <button class="btn btn-welligton" id="btn-welligton" title="Declarar WELLIGTON">
@@ -146,7 +131,7 @@
 
 <!-- ─── GAME LOG ─── -->
 <button id="game-log-toggle" title="Log do jogo" aria-label="Abrir log do jogo">&#128203;</button>
-<div id="game-log" role="log" aria-label="Log do Jogo">
+<div id="game-log" role="log" aria-label="Log do jogo">
   <div class="log-title">Log do Jogo</div>
   <div id="log-entries"></div>
 </div>
@@ -154,16 +139,8 @@
 <!-- ─── TOAST ─── -->
 <div id="toast" aria-live="assertive" aria-atomic="true"></div>
 
-<!-- ─── CONTROLS ─── -->
-<div id="controls">
-  <button id="undo-btn" title="Desfazer">↩ Desfazer</button>
-  <button id="pause-btn" title="Pausar">⏸ Pausar</button>
-  <button id="resume-btn" title="Continuar" style="display:none;">▶ Continuar</button>
-  <button id="new-game-btn" title="Novo Jogo">🔄 Novo Jogo</button>
-</div>
-
 <!-- ─── SCRIPT ─── -->
-<script src="/assets/script.js"></script>
+<script src="script.js"></script>
 
 </body>
 </html>

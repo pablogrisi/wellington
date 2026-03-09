@@ -347,7 +347,16 @@ def action_undo(request: Request):
 
 
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
-app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR)), name="assets")
+app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets"), html=False), name="assets")
+
+
+@app.get("/assets/cards/{filename}")
+async def get_card_image(filename: str):
+    """Serve card images from assets/cards directory."""
+    card_path = FRONTEND_DIR / "assets" / "cards" / filename
+    if card_path.exists():
+        return FileResponse(card_path)
+    return {"error": "File not found"}
 
 
 @app.get("/")
