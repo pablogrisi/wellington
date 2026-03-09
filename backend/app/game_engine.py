@@ -388,6 +388,7 @@ class WellingtonGame:
 
     def action_cut_self(self, slot: int) -> None:
         self._ensure_not_over()
+        logger.info(f"DEBUG: action_cut_self chamado - slot={slot}, pending_human_cut={self.pending_human_cut}, pending_ability={self.pending_ability}, pending_discard_resolution={self.pending_discard_resolution}")
         if not self._can_human_cut_now():
             raise ValueError("Nao ha corte pendente.")
 
@@ -549,11 +550,14 @@ class WellingtonGame:
             self.pending_discard_resolution["ability_resolved"] = True
 
         # Apos resolver a habilidade, o humano pode cortar imediatamente em sequencia.
+        logger.info(f"DEBUG: Após resolver habilidade - pending_discard_resolution={self.pending_discard_resolution is not None}, has_cut_opportunity={self._check_human_cut_opportunity(0) if self.pending_discard_resolution else False}")
         if self.pending_discard_resolution is not None and self._check_human_cut_opportunity(0):
+            logger.info("DEBUG: Reabrindo janela de corte após habilidade resolvida")
             self.pending_human_cut = True
             self.human_cut_available_until_draw = False
             return
 
+        logger.info("DEBUG: Não reabrindo janela de corte, processando fluxo normal")
         self._process_pending_discard_flow()
 
     def public_state(self) -> Dict[str, Any]:
@@ -1047,16 +1051,20 @@ class WellingtonGame:
 
     def _check_human_cut_opportunity(self, discarder_idx: int) -> bool:
         if self.players[0].locked:
+            logger.info("DEBUG: _check_human_cut_opportunity -> False (player locked)")
             return False
         # Enquanto estiver com carta comprada e sem descartar, nao pode cortar.
         if self.current_player == 0 and self.drawn_card is not None:
+            logger.info("DEBUG: _check_human_cut_opportunity -> False (has drawn_card)")
             return False
         top = self._top_discard()
         if top is None:
+            logger.info("DEBUG: _check_human_cut_opportunity -> False (no top card)")
             return False
 
         # Opcao 1: tentar corte com carta propria (inclusive chute)
         has_any_card = any(c is not None for c in self.players[0].cards)
+        logger.info(f"DEBUG: _check_human_cut_opportunity -> {has_any_card} (has_any_card={has_any_card}, top={top.label()})")
         if has_any_card:
             return True
 
