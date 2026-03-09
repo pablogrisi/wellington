@@ -90,7 +90,7 @@ body {
   gap: 12px;
   flex-wrap: wrap;
   position: relative;
-  z-index: 1;
+  z-index: 0;
 }
 
 /* ─── Middle Zone ─── */
@@ -556,25 +556,76 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 8px;
+  padding: 8px 12px;
   flex-wrap: wrap;
   justify-content: center;
+  background: rgba(10, 20, 14, 0.6);
+  border-top: 1px solid rgba(201, 168, 76, 0.2);
+  flex-direction: column;
+}
+
+/* Instruction hint - what to do next */
+#instruction-hint {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  text-align: center;
+  background: linear-gradient(135deg, rgba(27, 58, 138, 0.9) 0%, rgba(15, 45, 80, 0.95) 100%);
+  border-radius: 8px;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  max-width: 600px;
+  order: -1;
+  max-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+}
+#instruction-hint:not(:empty) {
+  max-height: 100px;
+  padding: 10px 16px;
+  border: 2px solid rgba(145, 200, 255, 0.6);
+  color: #e8f4ff;
+  text-shadow: 0 0 8px rgba(145, 200, 255, 0.5);
+  box-shadow: 0 0 16px rgba(145, 200, 255, 0.3) inset, 0 0 24px rgba(145, 200, 255, 0.2);
 }
 
 /* Context hint text in the panel */
 #action-hint {
   font-family: 'Cinzel', serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   color: var(--text-secondary);
   text-align: center;
-  min-height: 20px;
-  transition: color 0.2s;
+  background: rgba(10, 14, 10, 0.95);
+  border-radius: 8px;
+  transition: all 0.3s;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  max-width: 500px;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  margin: 0;
 }
-#action-hint.active {
+#action-hint:not(:empty) {
+  display: flex;
+  max-height: 100px;
+  padding: 8px 16px;
+  border: 2px solid rgba(201, 168, 76, 0.4);
   color: var(--gold-light);
-  text-shadow: 0 0 12px rgba(201,168,76,0.4);
+  background: rgba(15, 45, 26, 0.98);
+  border-color: rgba(201, 168, 76, 0.8);
+  text-shadow: 0 0 12px rgba(201,168,76,0.6), 0 0 24px rgba(201,168,76,0.3);
+  box-shadow: 0 0 16px rgba(201,168,76,0.3) inset, 0 0 20px rgba(201,168,76,0.15);
 }
 
 /* ─── Buttons ─── */
@@ -641,7 +692,7 @@ body {
 #ability-panel.visible {
   opacity: 1;
   transform: translate(-50%,-50%) scale(1);
-  pointer-events: all;
+  pointer-events: none;
 }
 .ability-title {
   font-family: 'Cinzel', serif;
@@ -669,7 +720,6 @@ body {
   margin-bottom: 10px;
 }
 
-/* ─── Cut Countdown ─── */
 /* ─── Ability 8 Modal ─── */
 #ability8-modal {
   position: fixed;
@@ -747,43 +797,7 @@ body {
 
 /* ─── Cut Countdown ─── */
 #cut-countdown {
-  position: fixed;
-  top: 46%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.85);
-  border: 2px solid var(--gold);
-  border-radius: 12px;
-  padding: 12px 28px;
-  text-align: center;
-  z-index: 40;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-#cut-countdown.visible { opacity: 1; pointer-events: none; }
-#cut-countdown .cut-title {
-  font-family: 'Cinzel', serif;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: var(--gold);
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-#cut-countdown .cut-timer {
-  font-family: 'Cinzel', serif;
-  font-size: 36px;
-  font-weight: 900;
-  color: #fff;
-  text-shadow: 0 0 20px rgba(201,168,76,0.8);
-  line-height: 1;
-}
-#cut-countdown .cut-timer.urgent { color: #ff6b6b; text-shadow: 0 0 20px rgba(255,0,0,0.6); }
-#cut-countdown .cut-hint {
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin-top: 8px;
-  letter-spacing: 0.06em;
+  display: none;
 }
 
 /* ─── Game Log ─── */
@@ -919,6 +933,16 @@ body {
     --card-w: 70px;
     --card-h: 98px;
   }
+  
+  /* Restore absolute positioning for side bots on desktop */
+  #player-left, #player-right {
+    position: absolute !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+  }
+  #player-left { left: 16px !important; }
+  #player-right { right: 16px !important; }
+  
   .side-bot .card-grid {
     --card-w: 52px;
     --card-h: 72px;
@@ -931,7 +955,10 @@ body {
   #game-log { width: 300px; max-height: 300px; }
   .btn { font-size: 12px; padding: 10px 20px; }
   .player-label.human { font-size: 15px; }
-  #action-hint { font-size: 12px; }
+  #action-hint { 
+    font-size: 15px;
+    max-width: 500px;
+  }
 }
 
 @media (min-width: 1000px) {
@@ -951,10 +978,129 @@ body {
 
 /* ─── Mobile ─── */
 @media (max-width: 699px) {
+  :root {
+    --card-w: 50px;
+    --card-h: 70px;
+  }
+  
   #bottom-zone { padding-bottom: 0; }
-  #action-panel { padding: 4px 6px; gap: 8px; }
-  #player-left, #player-right { display: none; }
-  #middle-zone { gap: 10px; }
+  
+  #action-panel { 
+    padding: 6px 8px; 
+    gap: 8px; 
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  #action-hint { 
+    font-size: 13px;
+    min-height: 32px;
+    padding: 8px 12px;
+    max-width: none;
+    flex: 1;
+  }
+  }
+  
+  /* Middle zone: make space for side bots with absolute positioning */
+  #middle-zone { 
+    gap: 8px;
+    padding: 4px 56px;
+    position: relative;
+  }
+  
+  /* Keep side bots in absolute positioning but adjust spacing for mobile */
+  #player-left { 
+    left: 4px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+  }
+  
+  #player-right {
+    right: 4px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+  }
+  
+  .side-bot {
+    position: absolute !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    z-index: 2;
+  }
+  
+  .side-bot .player-label {
+    font-size: 9px;
+  }
+  
+  .side-bot .card-grid {
+    --card-w: 36px;
+    --card-h: 50px;
+    gap: 3px;
+  }
+  
+  .side-bot .player-status {
+    font-size: 8px;
+    padding: 1px 6px;
+  }
+  
+  /* Compact center area */
+  #center-area {
+    gap: 6px;
+    padding: 4px 8px;
+  }
+  
+  .pile-area {
+    gap: 3px;
+  }
+  
+  .pile-label {
+    font-size: 8px;
+  }
+  
+  .deck-count {
+    font-size: 9px;
+  }
+
+  #ability-panel {
+    top: 14%;
+    left: 50%;
+    transform: translate(-50%, 0) scale(0.96);
+    min-width: 220px;
+    max-width: calc(100vw - 24px);
+    padding: 12px 14px;
+  }
+
+  #ability-panel.visible {
+    transform: translate(-50%, 0) scale(1);
+  }
+  
+  /* Smaller player cards on top and bottom */
+  #player-top .card-grid {
+    --card-w: 36px;
+    --card-h: 50px;
+    gap: 3px;
+  }
+  
+  #player-top .player-label {
+    font-size: 9px;
+  }
+  
+  #player-human .card-grid {
+    --card-w: 50px;
+    --card-h: 70px;
+    gap: 4px;
+  }
+  
+  #player-human .player-label {
+    font-size: 12px;
+  }
+  
+  #instruction-hint {
+    font-size: 12px;
+    max-width: none;
+  }
 }
 
 /* ─── Active turn highlight ─── */

@@ -17,6 +17,16 @@ let wellingtonBannerTimer = null;
 let lastWellingtonCaller = null;
 let lastWinnerKey = null;
 const botVisualAnimations = {};
+let botCutReadyAt = 0;
+const playerGridHtmlCache = {};
+let discardHtmlCache = null;
+let drawnHtmlCache = null;
+let logHtmlCache = null;
+
+const BOT_TURN_DELAY_MS = 220;
+const BOT_CONTINUE_DELAY_MS = 380;
+const BOT_VISUAL_DELAY_MS = 450;
+const BOT_CUT_VISUAL_MS = 700;
 
 // Cut countdown timer
 let cutCountdown = 3;
@@ -53,6 +63,7 @@ const els = {
   turnIndicator: document.getElementById('turn-indicator'),
   phaseBanner: document.getElementById('phase-banner'),
   actionPanel: document.getElementById('action-panel'),
+  instructionHint: document.getElementById('instruction-hint'),
   actionHint: document.getElementById('action-hint'),
   btnWelligton: document.getElementById('btn-welligton'),
   
@@ -159,6 +170,9 @@ async function request(path, options = {}) {
   return response.json();
 }
 
+let lastRenderState = null;
+let renderTimeout = null;
+
 async function loadState() {
   state = await request("/api/state");
   render();
@@ -180,6 +194,20 @@ async function action(path, payload = null) {
 function render() {
   if (!state) return;
   
+  // Debounce rapid renders
+  if (renderTimeout) {
+    clearTimeout(renderTimeout);
+  }
+  
+  renderTimeout = setTimeout(() => {
+    doRender();
+    renderTimeout = null;
+  }, 16); // ~60fps
+}
+
+function doRender() {
+  if (!state) return;
+  
   syncUiStateWithGame();
   renderPlayerGate();
   renderPlayers();
@@ -187,6 +215,8 @@ function render() {
   renderDiscard();
   renderDrawnCard();
   renderControls();
+  renderBotAction();
+  renderInstructions();
   renderTurnIndicator();
   renderWellingtonButton();
   renderWellingtonAnnouncement();
@@ -311,7 +341,7 @@ function getBotVisualAnimation(playerId, visual) {
       slot: visual.slot,
       player_name: visual.player_name,
       visualKey,
-      until: Date.now() + 1500,
+      until: Date.now() + BOT_CUT_VISUAL_MS,
     };
     botVisualAnimations[playerId] = anim;
     
@@ -322,17 +352,8 @@ function getBotVisualAnimation(playerId, visual) {
       if (botVisualAnimations[playerId]?.visualKey === visualKey) {
         delete botVisualAnimations[playerId];
         render();
-        // Call bot-step after animation to execute the cut
-        if (currentState?.phase === 'cut') {
-          fetch('/api/bot-step/', { method: 'POST', credentials: 'include' })
-            .then(r => r.json())
-            .then(data => {
-              currentState = data;
-              render();
-            });
-        }
       }
-    }, 1510);
+    }, BOT_CUT_VISUAL_MS + 20);
     return anim;
   }
 
@@ -357,7 +378,7 @@ function getBotVisualAnimation(playerId, visual) {
       mode: 'replace-discard',
       slot: visual.slot_discarded,
       visualKey,
-      until: Date.now() + 1000,
+      until: Date.now() + BOT_VISUAL_DELAY_MS,
     };
     botVisualAnimations[playerId] = anim;
     setTimeout(() => {
@@ -365,7 +386,7 @@ function getBotVisualAnimation(playerId, visual) {
         delete botVisualAnimations[playerId];
         render();
       }
-    }, 1010);
+    }, BOT_VISUAL_DELAY_MS + 20);
     return anim;
   }
 
@@ -373,7 +394,7 @@ function getBotVisualAnimation(playerId, visual) {
     const anim = {
       mode: 'drawn-discard',
       visualKey,
-      until: Date.now() + 1000,
+      until: Date.now() + BOT_VISUAL_DELAY_MS,
     };
     botVisualAnimations[playerId] = anim;
     setTimeout(() => {
@@ -381,7 +402,7 @@ function getBotVisualAnimation(playerId, visual) {
         delete botVisualAnimations[playerId];
         render();
       }
-    }, 1010);
+    }, BOT_VISUAL_DELAY_MS + 20);
     return anim;
   }
 
@@ -504,8 +525,12 @@ function renderPlayers() {
       }
     }
 
+    const nextGridHtml = extraBotHtml + cardsHtml;
     playerEl.grid.classList.toggle('has-bot-extra', !!extraBotHtml);
-    playerEl.grid.innerHTML = extraBotHtml + cardsHtml;
+    if (playerGridHtmlCache[pos] !== nextGridHtml) {
+      playerEl.grid.innerHTML = nextGridHtml;
+      playerGridHtmlCache[pos] = nextGridHtml;
+    }
   }
 }
 
@@ -584,16 +609,26 @@ function renderDeck() {
 function renderDiscard() {
   if (els.discardFace && state.top_discard) {
     const topCard = parseCard(state.top_discard);
-    els.discardFace.innerHTML = renderCardImage(topCard);
+    const nextHtml = renderCardImage(topCard);
+    if (discardHtmlCache !== nextHtml) {
+      els.discardFace.innerHTML = nextHtml;
+      discardHtmlCache = nextHtml;
+    }
   } else if (els.discardFace) {
-    els.discardFace.innerHTML = '';
+    if (discardHtmlCache !== '') {
+      els.discardFace.innerHTML = '';
+      discardHtmlCache = '';
+    }
   }
 }
 
 function renderDrawnCard() {
   if (!state.drawn_card) {
     if (els.drawnPreview) els.drawnPreview.classList.remove('visible');
-    if (els.drawnFace) els.drawnFace.innerHTML = '';
+    if (els.drawnFace && drawnHtmlCache !== '') {
+      els.drawnFace.innerHTML = '';
+      drawnHtmlCache = '';
+    }
     if (els.drawnHint) els.drawnHint.textContent = '';
     return;
   }
@@ -602,7 +637,11 @@ function renderDrawnCard() {
     els.drawnPreview.classList.add('visible');
     if (els.drawnFace) {
       const drawnCard = parseCard(state.drawn_card);
-      els.drawnFace.innerHTML = renderCardImage(drawnCard);
+      const nextHtml = renderCardImage(drawnCard);
+      if (drawnHtmlCache !== nextHtml) {
+        els.drawnFace.innerHTML = nextHtml;
+        drawnHtmlCache = nextHtml;
+      }
     }
   }
   
@@ -619,8 +658,77 @@ function renderDrawnCard() {
 
 function renderControls() {
   if (els.undoBtn) els.undoBtn.disabled = !state.can_undo;
-  if (els.pauseBtn) els.pauseBtn.disabled = state.paused;
-  if (els.resumeBtn) els.resumeBtn.disabled = !state.paused;
+  
+  // Show pause button when game is not paused, show resume button when paused
+  if (els.pauseBtn) {
+    els.pauseBtn.style.display = state.paused ? 'none' : 'flex';
+  }
+  if (els.resumeBtn) {
+    els.resumeBtn.style.display = state.paused ? 'flex' : 'none';
+  }
+}
+
+function renderBotAction() {
+  if (!els.actionHint) return;
+  
+  if (state.last_bot_action) {
+    els.actionHint.textContent = state.last_bot_action;
+  } else {
+    els.actionHint.textContent = '';
+  }
+}
+
+function renderInstructions() {
+  if (!els.instructionHint || !state) {
+    if (els.instructionHint) els.instructionHint.textContent = '';
+    return;
+  }
+  
+  // Show pause message if game is paused
+  if (state.paused) {
+    els.instructionHint.textContent = 'Jogo pausado — Clique em "Retornar" para continuar';
+    return;
+  }
+  
+  // If game is over, clear instructions
+  if (state.game_over) {
+    if (els.instructionHint) els.instructionHint.textContent = '';
+    return;
+  }
+  
+  // If it's not our turn, show waiting message
+  if (state.current_player !== 0) {
+    const botName = state.players[state.current_player]?.name || 'Bot';
+    els.instructionHint.textContent = `Aguarde ${botName}...`;
+    return;
+  }
+  
+  // It's our turn - show what to do based on phase
+  let instruction = '';
+  
+  if (phase === 'cut-self' || phase === 'cut-other-transfer') {
+    // Show timer for cut phases
+    const timerDisplay = cutCountdown > 0 ? ` (${cutCountdown}s)` : '';
+    if (phase === 'cut-self') {
+      instruction = `Selecione uma de suas cartas para cortar${timerDisplay}`;
+    } else {
+      const transfer = state.pending_human_cut_other_transfer;
+      const targetPlayerId = transfer ? Number(transfer.target_player) : NaN;
+      const targetName = Number.isInteger(targetPlayerId) ? (state.players[targetPlayerId]?.name || 'Bot') : 'Bot';
+      instruction = `Selecione uma de suas cartas para enviar para ${targetName}${timerDisplay}`;
+    }
+  } else if (phase === 'replace') {
+    instruction = 'Escolha uma de suas cartas para enviar ao Bot que descartou';
+  } else if (phase === 'ability') {
+    instruction = 'Aguarde instruções da habilidade ativada';
+  } else if (phase === 'wellington') {
+    instruction = 'Declare WELLINGTON ou passe para a próxima rodada';
+  } else {
+    // null phase - normal gameplay
+    instruction = 'Clique no Monte para comprar uma carta';
+  }
+  
+  els.instructionHint.textContent = instruction;
 }
 
 function renderTurnIndicator() {
@@ -659,8 +767,6 @@ function renderWellingtonButton() {
 let cutTimerInterval = null;
 
 function renderCutCountdown() {
-  if (!els.cutCountdown) return;
-  
   if (state.pending_human_cut) {
     // Start countdown if not running
     if (!cutTimerInterval) {
@@ -677,26 +783,14 @@ function renderCutCountdown() {
             console.error("Failed to skip cut:", err);
           }
         }
-        if (els.cutTimer) {
-          els.cutTimer.textContent = cutCountdown;
-          if (cutCountdown <= 1) {
-            els.cutTimer.classList.add('urgent');
-          } else {
-            els.cutTimer.classList.remove('urgent');
-          }
-        }
       }, 1000);
     }
-    
-    els.cutCountdown.classList.add('visible');
-    if (els.cutTimer) els.cutTimer.textContent = cutCountdown;
   } else {
     // Clear countdown
     if (cutTimerInterval) {
       clearInterval(cutTimerInterval);
       cutTimerInterval = null;
     }
-    els.cutCountdown.classList.remove('visible');
   }
 }
 
@@ -739,30 +833,34 @@ function renderAbilityPanel() {
   }
 }
 
-function renderLog() {
-  function renderAbility8Modal() {
-    if (!els.ability8Modal) return;
+function renderAbility8Modal() {
+  if (!els.ability8Modal) return;
 
-    if (state.pending_ability8_preview) {
-      els.ability8Modal.classList.add('visible');
-    
-      const preview = state.pending_ability8_preview;
-    
-      if (els.ability8OwnSlot) els.ability8OwnSlot.textContent = preview.own_slot;
-      if (els.ability8OwnCard) els.ability8OwnCard.textContent = preview.own_label;
-      if (els.ability8TargetSlot) els.ability8TargetSlot.textContent = preview.target_slot;
-      if (els.ability8TargetCard) els.ability8TargetCard.textContent = preview.target_label;
-    } else {
-      els.ability8Modal.classList.remove('visible');
-    }
+  if (state.pending_ability8_preview) {
+    els.ability8Modal.classList.add('visible');
+
+    const preview = state.pending_ability8_preview;
+
+    if (els.ability8OwnSlot) els.ability8OwnSlot.textContent = preview.own_slot;
+    if (els.ability8OwnCard) els.ability8OwnCard.textContent = preview.own_label;
+    if (els.ability8TargetSlot) els.ability8TargetSlot.textContent = preview.target_slot;
+    if (els.ability8TargetCard) els.ability8TargetCard.textContent = preview.target_label;
+  } else {
+    els.ability8Modal.classList.remove('visible');
   }
+}
 
-  function renderLog() {
+function renderLog() {
   if (!els.logEntries || !state.log) return;
-  
-  els.logEntries.innerHTML = state.log.slice(-20).map(entry => 
+
+  const nextHtml = state.log.slice(-20).map(entry =>
     `<div class="log-entry">${entry}</div>`
   ).join('');
+
+  if (logHtmlCache !== nextHtml) {
+    els.logEntries.innerHTML = nextHtml;
+    logHtmlCache = nextHtml;
+  }
 }
 
 function showToast(message) {
@@ -977,9 +1075,23 @@ function scheduleBotStep() {
   clearTimeout(botStepTimer);
 
   if (!state.player_ready || state.game_over || state.paused) return;
+  
+  // When cut window is open, keep one stable wake-up timer instead of resetting it every render.
+  if (state.pending_bot_cut && !state.actions?.can_bot_step) {
+    if (!botCutReadyAt) {
+      botCutReadyAt = Date.now() + (state.bot_cut_delay_ms || 2500);
+    }
+    const waitMs = Math.max(80, botCutReadyAt - Date.now());
+    botStepTimer = setTimeout(() => {
+      action('/api/bot-step');
+    }, waitMs);
+    return;
+  }
+
+  botCutReadyAt = 0;
   if (!state.actions?.can_bot_step) return;
 
-  const delay = state.pending_bot_turn ? 1000 : 500;
+  const delay = state.pending_bot_turn ? BOT_CONTINUE_DELAY_MS : BOT_TURN_DELAY_MS;
   botStepTimer = setTimeout(() => {
     action('/api/bot-step');
   }, delay);

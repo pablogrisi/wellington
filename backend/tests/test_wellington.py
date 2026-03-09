@@ -2,6 +2,7 @@
 Testes para o sistema Wellington.
 参照: GAME_RULES_SPEC.md - Wellington
 """
+import random
 import pytest
 from app.game_engine import WellingtonGame, Card
 
@@ -152,3 +153,42 @@ class TestWellingtonHuman:
         game_started.action_pass_human_wellington_window()
         
         assert game_started.pending_human_wellington_window is False
+
+
+class TestBotWellingtonKnowledge:
+    """Bot só pode decidir com cartas que já conhece."""
+
+    def test_bot_does_not_call_with_unknown_cards(self, game_started):
+        game_started.current_player = 1
+        bot = game_started.players[1]
+        bot.locked = False
+        bot.cards = [
+            Card(rank="A", suit="H"),
+            Card(rank="K", suit="S"),
+            Card(rank="A", suit="D"),
+            Card(rank="JK", suit=None),
+        ]
+        bot.known_slots = {0, 1}
+        game_started.wellington_caller = None
+
+        game_started._finish_turn_after_play(player_idx=1)
+
+        assert game_started.wellington_caller is None
+
+    def test_bot_can_call_when_all_cards_are_known(self, game_started):
+        game_started.current_player = 1
+        bot = game_started.players[1]
+        bot.locked = False
+        bot.cards = [
+            Card(rank="A", suit="H"),
+            Card(rank="K", suit="S"),
+            Card(rank="A", suit="D"),
+            Card(rank="JK", suit=None),
+        ]
+        bot.known_slots = {0, 1, 2, 3}
+        game_started.wellington_caller = None
+        game_started.random = random.Random(1)
+
+        game_started._finish_turn_after_play(player_idx=1)
+
+        assert game_started.wellington_caller == 1
