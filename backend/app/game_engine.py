@@ -314,11 +314,15 @@ class WellingtonGame:
             raise ValueError("Nao da para trocar em slot vazio.")
 
         new_card = self.drawn_card
+        logger.info(f"DEBUG REPLACE: old={old.label() if old else 'None'}, new_card={new_card.label()}, slot={slot}")
+        
         self.drawn_card = None
         player.cards[slot] = new_card
         player.known_slots.add(slot)
 
         self.discard_pile.append(old)
+        logger.info(f"DEBUG REPLACE: After - player.cards[{slot}]={player.cards[slot].label() if player.cards[slot] else 'None'}, top_discard={self._top_discard().label() if self._top_discard() else 'None'}")
+        
         self._log(f"Voce trocou slot {slot} por {new_card.label()} e descartou {old.label()}.")
 
         self._on_discard(player_idx=0, card=old)
@@ -391,6 +395,8 @@ class WellingtonGame:
         card = player.cards[slot]
         if card is None:
             raise ValueError("Slot vazio para corte.")
+
+        logger.info(f"DEBUG: Cut attempt - card.rank={card.rank}, top.rank={top.rank}, card.label()={card.label()}, top.label()={top.label()}")
 
         if card.rank == top.rank:
             player.cards[slot] = None

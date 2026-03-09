@@ -362,6 +362,7 @@ function renderDiscard() {
 function renderDrawnCard() {
   if (!state.drawn_card) {
     if (els.drawnPreview) els.drawnPreview.classList.remove('visible');
+    if (els.drawnFace) els.drawnFace.innerHTML = '';
     if (els.drawnHint) els.drawnHint.textContent = '';
     return;
   }
@@ -462,7 +463,10 @@ function renderCutCountdown() {
 function renderAbilityPanel() {
   if (!els.abilityPanel) return;
   
+  console.log('renderAbilityPanel - pending_ability:', state.pending_ability);
+  
   if (state.pending_ability) {
+    console.log('Showing ability panel for rank:', state.pending_ability.rank);
     els.abilityPanel.classList.add('visible');
     
     const rank = state.pending_ability.rank || '';
