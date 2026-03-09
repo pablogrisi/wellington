@@ -65,7 +65,15 @@ const els = {
   abilityTitle: document.getElementById('ability-title'),
   abilityDesc: document.getElementById('ability-desc'),
   abilityCard: document.getElementById('ability-card-name'),
-  btnAblCancel: document.getElementById('btn-ability-cancel'),
+    // Ability 8 modal
+    ability8Modal: document.getElementById('ability8-modal'),
+    ability8OwnSlot: document.getElementById('ability8-own-slot'),
+    ability8OwnCard: document.getElementById('ability8-own-card'),
+    ability8TargetSlot: document.getElementById('ability8-target-slot'),
+    ability8TargetCard: document.getElementById('ability8-target-card'),
+    btnAbility8Swap: document.getElementById('btn-ability8-swap'),
+    btnAbility8NoSwap: document.getElementById('btn-ability8-no-swap'),
+  
   
   // Log
   logToggle: document.getElementById('game-log-toggle'),
@@ -185,6 +193,7 @@ function render() {
   renderWinnerAnnouncement();
   renderCutCountdown();
   renderAbilityPanel();
+    renderAbility8Modal();
   renderLog();
   
   // Schedule automation
@@ -731,6 +740,24 @@ function renderAbilityPanel() {
 }
 
 function renderLog() {
+  function renderAbility8Modal() {
+    if (!els.ability8Modal) return;
+
+    if (state.pending_ability8_preview) {
+      els.ability8Modal.classList.add('visible');
+    
+      const preview = state.pending_ability8_preview;
+    
+      if (els.ability8OwnSlot) els.ability8OwnSlot.textContent = preview.own_slot;
+      if (els.ability8OwnCard) els.ability8OwnCard.textContent = preview.own_label;
+      if (els.ability8TargetSlot) els.ability8TargetSlot.textContent = preview.target_slot;
+      if (els.ability8TargetCard) els.ability8TargetCard.textContent = preview.target_label;
+    } else {
+      els.ability8Modal.classList.remove('visible');
+    }
+  }
+
+  function renderLog() {
   if (!els.logEntries || !state.log) return;
   
   els.logEntries.innerHTML = state.log.slice(-20).map(entry => 
@@ -885,13 +912,20 @@ if (els.btnWelligton) {
   });
 }
 
-// Ability cancel
-if (els.btnAblCancel) {
-  els.btnAblCancel.addEventListener('click', () => {
-    // Reset ability selection
-    abilitySelection = { own_slot: null, target_player: null, target_slot: null };
-    // Skip ability - send empty data to cancel
-    action('/api/action/ability', { data: null });
+// Ability 8 swap decision
+if (els.btnAbility8Swap) {
+  els.btnAbility8Swap.addEventListener('click', () => {
+    action('/api/action/ability', { 
+      data: { do_swap: true }
+    });
+  });
+}
+
+if (els.btnAbility8NoSwap) {
+  els.btnAbility8NoSwap.addEventListener('click', () => {
+    action('/api/action/ability', { 
+      data: { do_swap: false }
+    });
   });
 }
 

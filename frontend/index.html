@@ -141,7 +141,28 @@
   <div class="ability-card-badge" id="ability-card-name">J♦</div>
   <div class="ability-title" id="ability-title">Habilidade Ativada</div>
   <div class="ability-desc" id="ability-desc">Selecione uma de suas cartas para revelar.</div>
-  <button class="btn btn-ghost" id="btn-ability-cancel" style="margin: 0 auto; display:block;">Cancelar</button>
+
+<!-- ─── ABILITY 8 SWAP MODAL ─── -->
+<div id="ability8-modal" role="dialog" aria-modal="true" aria-label="Decisão de troca">
+  <div class="ability8-content">
+    <h2 class="ability8-title">Habilidade 8: Trocar Cartas?</h2>
+    <div class="ability8-cards">
+      <div class="ability8-card-info">
+        <div class="ability8-label">Sua carta (slot <span id="ability8-own-slot"></span>):</div>
+        <div class="ability8-card-value" id="ability8-own-card"></div>
+      </div>
+      <div class="ability8-swap-icon">⇄</div>
+      <div class="ability8-card-info">
+        <div class="ability8-label">Carta do oponente (slot <span id="ability8-target-slot"></span>):</div>
+        <div class="ability8-card-value" id="ability8-target-card"></div>
+      </div>
+    </div>
+    <div class="ability8-buttons">
+      <button class="btn btn-primary" id="btn-ability8-swap">Trocar</button>
+      <button class="btn btn-secondary" id="btn-ability8-no-swap">Não trocar</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <!-- ─── GAME LOG ─── -->
