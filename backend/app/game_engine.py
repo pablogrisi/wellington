@@ -1210,7 +1210,10 @@ class WellingtonGame:
                 replace_slot = self.random.choice(unknown_slots)
 
         self.pending_bot_turn = {"player": idx, "replace_slot": replace_slot}
-        self._log(f"{p.name} comprou uma carta.")
+        if replace_slot is not None:
+            self._log(f"{p.name} comprou uma carta e vai substituir slot {replace_slot}.")
+        else:
+            self._log(f"{p.name} comprou uma carta e vai descartá-la.")
 
     # ---------- Helpers ----------
 
