@@ -1,5 +1,5 @@
 ﻿/**
- * WELLIGTON - Game Client
+ * WELLINGTON - Game Client
  * Connects to FastAPI backend
  */
 
@@ -65,7 +65,7 @@ const els = {
   actionPanel: document.getElementById('action-panel'),
   instructionHint: document.getElementById('instruction-hint'),
   actionHint: document.getElementById('action-hint'),
-  btnWelligton: document.getElementById('btn-welligton'),
+  btnWellington: document.getElementById('btn-wellington'),
   
   // Cut countdown
   cutCountdown: document.getElementById('cut-countdown'),
@@ -456,7 +456,7 @@ function renderPlayers() {
         playerEl.status.classList.add('winner');
         playerEl.status.classList.remove('locked');
       } else if (player.locked) {
-        playerEl.status.textContent = 'WELLIGTON LOCKED';
+        playerEl.status.textContent = 'WELLINGTON LOCKED';
         playerEl.status.classList.add('locked');
         playerEl.status.classList.remove('winner');
       } else {
@@ -567,7 +567,7 @@ function renderWellingtonAnnouncement() {
 
   const callerPlayer = state.players[caller];
   const callerName = callerPlayer?.name || `Jogador ${caller}`;
-  showPhaseBanner(`${callerName} pediu WELLIGTON!`);
+  showPhaseBanner(`${callerName} pediu WELLINGTON!`);
   lastWellingtonCaller = caller;
 }
 
@@ -758,10 +758,10 @@ function renderTurnIndicator() {
 }
 
 function renderWellingtonButton() {
-  if (!els.btnWelligton) return;
-  
+  if (!els.btnWellington) return;
+
   const canCall = state.actions?.can_call_wellington && phase === 'wellington';
-  els.btnWelligton.disabled = !canCall;
+  els.btnWellington.disabled = !canCall;
 }
 
 let cutTimerInterval = null;
@@ -1004,8 +1004,8 @@ document.addEventListener('click', (e) => {
 });
 
 // Wellington button
-if (els.btnWelligton) {
-  els.btnWelligton.addEventListener('click', () => {
+if (els.btnWellington) {
+  els.btnWellington.addEventListener('click', () => {
     action('/api/action/call-wellington');
   });
 }

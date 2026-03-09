@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logs de Jogadores - Wellington</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c1a12;
+      --panel: #12261a;
+      --panel-2: #172f21;
+      --border: #c9a84c;
+      --text: #f0e8d0;
+      --muted: #b8ad89;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      background: linear-gradient(130deg, #0d1f14, #12261a 50%, #0d1f14);
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0;
+      font-family: 'Cinzel', serif;
+      color: var(--border);
+      letter-spacing: 0.08em;
+      font-size: clamp(20px, 3vw, 30px);
+    }
+    .actions { display: flex; gap: 8px; }
+    button {
+      border: 1px solid rgba(201, 168, 76, 0.7);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 9px;
+      padding: 9px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .panel {
+      background: rgba(18, 38, 26, 0.95);
+      border: 1px solid rgba(201, 168, 76, 0.35);
+      border-radius: 12px;
+      padding: 14px;
+      overflow: auto;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+    }
+    th, td {
+      text-align: left;
+      padding: 9px 8px;
+      border-bottom: 1px solid rgba(201, 168, 76, 0.18);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    th { color: var(--muted); font-weight: 700; }
+    .muted { color: var(--muted); }
+    .status { font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>Painel de Logs</h1>
+      <div class="actions">
+        <button id="refresh">Atualizar</button>
+        <button id="logout">Sair</button>
+      </div>
+    </div>
+
+    <div class="status" id="status">Carregando...</div>
+
+    <section class="panel">
+      <h2>Resumo por Jogador</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Jogador</th>
+            <th>Primeiro acesso</th>
+            <th>Última atividade</th>
+            <th>Partidas jogadas</th>
+            <th>Sessões</th>
+          </tr>
+        </thead>
+        <tbody id="players-body"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Eventos Recentes</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Horário</th>
+            <th>Jogador</th>
+            <th>Evento</th>
+            <th>Sessão</th>
+          </tr>
+        </thead>
+        <tbody id="events-body"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const playersBody = document.getElementById('players-body');
+    const eventsBody = document.getElementById('events-body');
+
+    function fmt(iso) {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('pt-BR');
+    }
+
+    function render(data) {
+      playersBody.innerHTML = data.players.map((row) => `
+        <tr>
+          <td>${row.player_name}</td>
+          <td>${fmt(row.first_played_at)}</td>
+          <td>${fmt(row.last_activity_at)}</td>
+          <td>${row.matches_played || 0}</td>
+          <td>${row.sessions || 0}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="5" class="muted">Sem dados ainda.</td></tr>';
+
+      eventsBody.innerHTML = data.recent_events.map((row) => `
+        <tr>
+          <td>${fmt(row.event_time)}</td>
+          <td>${row.player_name}</td>
+          <td>${row.event_type}</td>
+          <td>${row.session_id}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="muted">Sem eventos.</td></tr>';
+    }
+
+    async function loadLogs() {
+      statusEl.textContent = 'Carregando...';
+      const res = await fetch('/api/admin/logs', { credentials: 'include' });
+      if (res.status === 401) {
+        window.location.href = '/admin';
+        return;
+      }
+      if (!res.ok) {
+        statusEl.textContent = 'Falha ao carregar logs.';
+        return;
+      }
+      const data = await res.json();
+      render(data);
+      statusEl.textContent = `Atualizado em ${new Date().toLocaleTimeString('pt-BR')}`;
+    }
+
+    document.getElementById('refresh').addEventListener('click', loadLogs);
+    document.getElementById('logout').addEventListener('click', async () => {
+      await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+      window.location.href = '/admin';
+    });
+
+    loadLogs();
+  </script>
+</body>
+</html>

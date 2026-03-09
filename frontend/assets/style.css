@@ -529,9 +529,9 @@ body {
 #player-right { right: 16px; top: 50%; transform: translateY(-50%); }
 
 .side-bot .card-grid {
-  --card-w: 42px;
-  --card-h: 58px;
-  gap: 3px;
+  --card-w: 44px;
+  --card-h: 61px;
+  gap: 4px;
 }
 .side-bot .player-label { font-size: 9px; }
 
@@ -649,7 +649,7 @@ body {
 .btn:active { transform: scale(0.96); }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
-.btn-welligton {
+.btn-wellington {
   background: var(--gold-dark);
   color: #1a1000;
   border: 1px solid var(--gold);
@@ -658,7 +658,7 @@ body {
   font-size: 12px;
   letter-spacing: 0.12em;
 }
-.btn-welligton:hover:not(:disabled) {
+.btn-wellington:hover:not(:disabled) {
   background: var(--gold);
   box-shadow: 0 0 18px rgba(201,168,76,0.4), 0 2px 8px rgba(0,0,0,0.4);
 }
@@ -943,15 +943,12 @@ body {
   #player-left { left: 16px !important; }
   #player-right { right: 16px !important; }
   
-  .side-bot .card-grid {
-    --card-w: 52px;
-    --card-h: 72px;
-  }
-  .side-bot .player-label { font-size: 10px; }
+  .side-bot .card-grid,
   .player-area:not(.human):not(.side-bot) .card-grid {
-    --card-w: 52px;
-    --card-h: 72px;
+    --card-w: 56px;
+    --card-h: 78px;
   }
+  .side-bot .player-label { font-size: 11px; }
   #game-log { width: 300px; max-height: 300px; }
   .btn { font-size: 12px; padding: 10px 20px; }
   .player-label.human { font-size: 15px; }
@@ -966,13 +963,11 @@ body {
     --card-w: 80px;
     --card-h: 112px;
   }
-  .side-bot .card-grid {
-    --card-w: 62px;
-    --card-h: 87px;
-  }
+  .side-bot .card-grid,
   .player-area:not(.human):not(.side-bot) .card-grid {
-    --card-w: 60px;
-    --card-h: 84px;
+    --card-w: 66px;
+    --card-h: 92px;
+    gap: 4px;
   }
 }
 
@@ -999,7 +994,7 @@ body {
     max-width: none;
     flex: 1;
   }
-  }
+  
   
   /* Middle zone: make space for side bots with absolute positioning */
   #middle-zone { 
@@ -1035,8 +1030,8 @@ body {
   }
   
   .side-bot .card-grid {
-    --card-w: 36px;
-    --card-h: 50px;
+    --card-w: 38px;
+    --card-h: 53px;
     gap: 3px;
   }
   
@@ -1078,8 +1073,8 @@ body {
   
   /* Smaller player cards on top and bottom */
   #player-top .card-grid {
-    --card-w: 36px;
-    --card-h: 50px;
+    --card-w: 38px;
+    --card-h: 53px;
     gap: 3px;
   }
   
@@ -1100,6 +1095,51 @@ body {
   #instruction-hint {
     font-size: 12px;
     max-width: none;
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --card-w: 92px;
+    --card-h: 128px;
+  }
+
+  .side-bot .card-grid,
+  .player-area:not(.human):not(.side-bot) .card-grid {
+    --card-w: 74px;
+    --card-h: 103px;
+    gap: 4px;
+  }
+
+  .player-label {
+    font-size: 11px;
+  }
+
+  .player-label.human {
+    font-size: 18px;
+  }
+
+  #turn-indicator {
+    font-size: 14px;
+  }
+
+  #instruction-hint {
+    font-size: 16px;
+    max-width: 760px;
+  }
+
+  #action-hint {
+    font-size: 16px;
+    max-width: 640px;
+  }
+
+  .btn {
+    font-size: 13px;
+    padding: 11px 22px;
+  }
+
+  .btn-wellington {
+    font-size: 14px;
   }
 }
 
