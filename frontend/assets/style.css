@@ -156,6 +156,12 @@ body {
   color: var(--gold-light);
   border-color: rgba(201,168,76,0.5);
 }
+.player-status.winner {
+  display: inline-block;
+  background: rgba(44, 130, 87, 0.35);
+  color: #caffdc;
+  border-color: rgba(87, 216, 145, 0.65);
+}
 
 /* ─── Card Grid ─── */
 .card-grid {
@@ -171,6 +177,11 @@ body {
   gap: 4px;
 }
 
+.player-area:not(.human) .card-grid.has-bot-extra {
+  position: relative;
+  padding-top: 26px;
+}
+
 /* ─── Playing Card ─── */
 .card-slot {
   width: var(--card-w);
@@ -178,6 +189,40 @@ body {
   perspective: 600px;
   cursor: default;
   position: relative;
+}
+
+.card-slot.bot-drawn-extra {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  z-index: 6;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+  animation: botDrawPop 0.22s ease-out;
+}
+
+.card-slot.discard-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(150, 36, 36, 0.2);
+  border: 1px dashed rgba(255, 145, 145, 0.85);
+  border-radius: var(--radius-card);
+}
+
+.discard-marker-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #ffd6d6;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@keyframes botDrawPop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* Selectable = substituir / cortar-próprio */

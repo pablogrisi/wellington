@@ -15,6 +15,8 @@ let logVisible = false;
 let phase = null;
 let wellingtonBannerTimer = null;
 let lastWellingtonCaller = null;
+let lastWinnerKey = null;
+const botVisualAnimations = {};
 
 // Cut countdown timer
 let cutCountdown = 3;
@@ -180,6 +182,7 @@ function render() {
   renderTurnIndicator();
   renderWellingtonButton();
   renderWellingtonAnnouncement();
+  renderWinnerAnnouncement();
   renderCutCountdown();
   renderAbilityPanel();
   renderLog();
@@ -253,6 +256,81 @@ function renderCardSlot(card, index, isSelectable = false, isSelectableDanger = 
   </div>`;
 }
 
+function renderDiscardMarkerSlot(index = -1, extraClass = '') {
+  const dataSlot = index >= 0 ? `data-slot="${index}"` : '';
+  return `<div class="card-slot discard-marker ${extraClass}" ${dataSlot}>
+    <div class="discard-marker-label">DESCARTE</div>
+  </div>`;
+}
+
+function renderBotDrawnSlot(discarded = false) {
+  if (discarded) {
+    return renderDiscardMarkerSlot(-1, 'bot-drawn-extra');
+  }
+  return `<div class="card-slot bot-drawn-extra">
+    ${renderCardImage({ rank: '?', suit: null })}
+  </div>`;
+}
+
+function getBotVisualAnimation(playerId, visual) {
+  if (!visual || !visual.side) {
+    delete botVisualAnimations[playerId];
+    return null;
+  }
+
+  const visualKey = `${visual.side}:${visual.slot_discarded ?? 'none'}`;
+  const current = botVisualAnimations[playerId];
+  if (current && current.visualKey === visualKey) {
+    if (current.until && Date.now() >= current.until) {
+      delete botVisualAnimations[playerId];
+      return null;
+    }
+    return current;
+  }
+
+  if (visual.side === 'drawn' && Number.isInteger(visual.slot_discarded)) {
+    const anim = {
+      mode: 'replace-discard',
+      slot: visual.slot_discarded,
+      visualKey,
+      until: Date.now() + 1000,
+    };
+    botVisualAnimations[playerId] = anim;
+    setTimeout(() => {
+      if (botVisualAnimations[playerId]?.visualKey === visualKey) {
+        delete botVisualAnimations[playerId];
+        render();
+      }
+    }, 1010);
+    return anim;
+  }
+
+  if (visual.side === 'discarded') {
+    const anim = {
+      mode: 'drawn-discard',
+      visualKey,
+      until: Date.now() + 1000,
+    };
+    botVisualAnimations[playerId] = anim;
+    setTimeout(() => {
+      if (botVisualAnimations[playerId]?.visualKey === visualKey) {
+        delete botVisualAnimations[playerId];
+        render();
+      }
+    }, 1010);
+    return anim;
+  }
+
+  if (visual.side === 'drawn') {
+    const anim = { mode: 'drawn', visualKey };
+    botVisualAnimations[playerId] = anim;
+    return anim;
+  }
+
+  delete botVisualAnimations[playerId];
+  return null;
+}
+
 function renderPlayers() {
   const playerIds = { top: 2, left: 1, right: 3, human: 0 };
   
@@ -287,14 +365,24 @@ function renderPlayers() {
     
     // Update status
     if (playerEl.status) {
-      if (player.locked) {
+      const isWinner = state.game_over && Array.isArray(state.winner_ids) && state.winner_ids.includes(playerId);
+      if (isWinner) {
+        playerEl.status.textContent = 'VENCEDOR';
+        playerEl.status.classList.add('winner');
+        playerEl.status.classList.remove('locked');
+      } else if (player.locked) {
         playerEl.status.textContent = 'WELLIGTON LOCKED';
         playerEl.status.classList.add('locked');
+        playerEl.status.classList.remove('winner');
       } else {
         playerEl.status.textContent = '';
         playerEl.status.classList.remove('locked');
+        playerEl.status.classList.remove('winner');
       }
     }
+
+    const botAnim = player.is_bot ? getBotVisualAnimation(playerId, player.bot_visual) : null;
+    const botAnimActive = !!botAnim && (!botAnim.until || Date.now() < botAnim.until);
     
     // Render cards
     let cardsHtml = '';
@@ -318,6 +406,11 @@ function renderPlayers() {
         }
       }
       
+      if (player.is_bot && botAnimActive && botAnim.mode === 'replace-discard' && idx === botAnim.slot) {
+        cardsHtml += renderDiscardMarkerSlot(idx);
+        return;
+      }
+
       // Determine if selectable
       let selectable = false;
       let selectableDanger = false;
@@ -332,12 +425,22 @@ function renderPlayers() {
       
       cardsHtml += renderCardSlot(cardToRender, idx, selectable, selectableDanger);
     });
-    
-    playerEl.grid.innerHTML = cardsHtml;
+
+    let extraBotHtml = '';
+    if (player.is_bot && botAnimActive) {
+      if (botAnim.mode === 'drawn' || botAnim.mode === 'replace-discard') {
+        extraBotHtml = renderBotDrawnSlot(false);
+      } else if (botAnim.mode === 'drawn-discard') {
+        extraBotHtml = renderBotDrawnSlot(true);
+      }
+    }
+
+    playerEl.grid.classList.toggle('has-bot-extra', !!extraBotHtml);
+    playerEl.grid.innerHTML = extraBotHtml + cardsHtml;
   }
 }
 
-function showPhaseBanner(message) {
+function showPhaseBanner(message, durationMs = 2300) {
   if (!els.phaseBanner) return;
 
   if (wellingtonBannerTimer) {
@@ -348,14 +451,17 @@ function showPhaseBanner(message) {
   els.phaseBanner.textContent = message;
   els.phaseBanner.classList.add('show');
 
-  wellingtonBannerTimer = setTimeout(() => {
-    els.phaseBanner.classList.remove('show');
-    wellingtonBannerTimer = null;
-  }, 2300);
+  if (durationMs > 0) {
+    wellingtonBannerTimer = setTimeout(() => {
+      els.phaseBanner.classList.remove('show');
+      wellingtonBannerTimer = null;
+    }, durationMs);
+  }
 }
 
 function renderWellingtonAnnouncement() {
   if (!state || !state.players) return;
+  if (state.game_over) return;
 
   const caller = state.wellington_caller;
   if (caller === null || caller === undefined) {
@@ -369,6 +475,25 @@ function renderWellingtonAnnouncement() {
   const callerName = callerPlayer?.name || `Jogador ${caller}`;
   showPhaseBanner(`${callerName} pediu WELLIGTON!`);
   lastWellingtonCaller = caller;
+}
+
+function renderWinnerAnnouncement() {
+  if (!state || !state.players || !state.game_over) {
+    lastWinnerKey = null;
+    return;
+  }
+
+  const winnerIds = Array.isArray(state.winner_ids) ? state.winner_ids : [];
+  if (winnerIds.length === 0) return;
+
+  const winnerKey = winnerIds.join(',');
+  if (winnerKey === lastWinnerKey) return;
+
+  const winnerNames = winnerIds
+    .map(id => state.players[id]?.name || `Jogador ${id}`)
+    .join(' / ');
+  showPhaseBanner(`Vencedor: ${winnerNames}`, 4200);
+  lastWinnerKey = winnerKey;
 }
 
 function renderDeck() {
@@ -431,6 +556,15 @@ function renderControls() {
 
 function renderTurnIndicator() {
   if (!els.turnIndicator) return;
+
+  if (state.game_over && Array.isArray(state.winner_ids) && state.winner_ids.length > 0) {
+    const winnerNames = state.winner_ids
+      .map(id => state.players[id]?.name || `Jogador ${id}`)
+      .join(' / ');
+    els.turnIndicator.textContent = `VENCEDOR: ${winnerNames.toUpperCase()}`;
+    els.turnIndicator.style.display = 'block';
+    return;
+  }
   
   const currentPlayer = state.players[state.current_player];
   
@@ -499,11 +633,8 @@ function renderCutCountdown() {
 
 function renderAbilityPanel() {
   if (!els.abilityPanel) return;
-  
-  console.log('renderAbilityPanel - pending_ability:', state.pending_ability);
-  
+
   if (state.pending_ability) {
-    console.log('Showing ability panel for rank:', state.pending_ability.rank);
     els.abilityPanel.classList.add('visible');
     
     const rank = state.pending_ability.rank || '';
@@ -750,20 +881,14 @@ if (els.newGameBtn) {
 
 function scheduleBotStep() {
   clearTimeout(botStepTimer);
-  
-  console.log('scheduleBotStep: player_ready=', state.player_ready, 'game_over=', state.game_over, 'paused=', state.paused, 'can_bot_step=', state.actions?.can_bot_step, 'current_player=', state.current_player);
-  
+
   if (!state.player_ready || state.game_over || state.paused) return;
-  if (!state.actions?.can_bot_step) {
-    console.log('scheduleBotStep: NOT scheduling bot step (can_bot_step is false)');
-    return;
-  }
-  
-  console.log('scheduleBotStep: SCHEDULING bot step in 500ms');
+  if (!state.actions?.can_bot_step) return;
+
+  const delay = state.pending_bot_turn ? 1000 : 500;
   botStepTimer = setTimeout(() => {
-    console.log('scheduleBotStep: EXECUTING bot step now');
     action('/api/bot-step');
-  }, 500);
+  }, delay);
 }
 
 function scheduleCutAutoPass() {
