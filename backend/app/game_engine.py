@@ -236,13 +236,18 @@ class WellingtonGame:
 
     def can_bot_step(self) -> bool:
         self._sanitize_human_cut_state()
+        logger.info(f"DEBUG can_bot_step: pending_ability={self.pending_ability}, pending_human_cut_other_transfer={self.pending_human_cut_other_transfer}, pending_bot_cut={self.pending_bot_cut}, game_over={self.game_over}, paused={self.paused}, current_player={self.current_player}, pending_human_cut={self.pending_human_cut}")
         if self.pending_ability is not None:
+            logger.info("DEBUG can_bot_step: False (pending_ability)")
             return False
         if self.pending_human_cut_other_transfer is not None:
+            logger.info("DEBUG can_bot_step: False (pending_human_cut_other_transfer)")
             return False
         if self.pending_bot_cut:
-            return not self.game_over and not self.paused
-        return (
+            result = not self.game_over and not self.paused
+            logger.info(f"DEBUG can_bot_step: {result} (pending_bot_cut check)")
+            return result
+        result = (
             not self.game_over
             and not self.paused
             and self.current_player != 0
@@ -250,6 +255,8 @@ class WellingtonGame:
             and self.pending_human_cut_other_transfer is None
             and self.pending_ability is None
         )
+        logger.info(f"DEBUG can_bot_step: {result} (final check)")
+        return result
 
     def bot_step(self) -> bool:
         if not self.can_bot_step():
@@ -764,7 +771,9 @@ class WellingtonGame:
         self._process_pending_discard_flow()
 
     def _advance_turn(self) -> None:
+        logger.info(f"DEBUG _advance_turn: current_player={self.current_player}, wellington_caller={self.wellington_caller}, wellington_waiting_return={self.wellington_waiting_return}")
         next_idx = (self.current_player + 1) % len(self.players)
+        logger.info(f"DEBUG _advance_turn: next_idx={next_idx}, is_bot={self.players[next_idx].is_bot}")
         if (
             self.wellington_caller is not None
             and self.wellington_waiting_return
@@ -777,8 +786,10 @@ class WellingtonGame:
         self.current_player = next_idx
         self.drawn_card = None
         self.pending_human_wellington_window = False
+        logger.info(f"DEBUG _advance_turn: after advance - current_player={self.current_player}, is_bot={self.players[self.current_player].is_bot}")
 
         if self.players[self.current_player].is_bot:
+            logger.info("DEBUG _advance_turn: next player is bot, returning (frontend will call bot-step)")
             return
 
     def _finish_game(self) -> None:

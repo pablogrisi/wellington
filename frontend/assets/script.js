@@ -706,10 +706,17 @@ if (els.newGameBtn) {
 function scheduleBotStep() {
   clearTimeout(botStepTimer);
   
-  if (!state.player_ready || state.game_over || state.paused) return;
-  if (!state.actions?.can_bot_step) return;
+  console.log('scheduleBotStep: player_ready=', state.player_ready, 'game_over=', state.game_over, 'paused=', state.paused, 'can_bot_step=', state.actions?.can_bot_step, 'current_player=', state.current_player);
   
+  if (!state.player_ready || state.game_over || state.paused) return;
+  if (!state.actions?.can_bot_step) {
+    console.log('scheduleBotStep: NOT scheduling bot step (can_bot_step is false)');
+    return;
+  }
+  
+  console.log('scheduleBotStep: SCHEDULING bot step in 500ms');
   botStepTimer = setTimeout(() => {
+    console.log('scheduleBotStep: EXECUTING bot step now');
     action('/api/bot-step');
   }, 500);
 }
