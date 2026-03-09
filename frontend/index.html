@@ -19,6 +19,7 @@
       <button type="submit" class="btn btn-primary">Começar</button>
       <div id="player-gate-error" class="gate-error"></div>
     </form>
+    <button type="button" class="btn-rules-link" id="gate-rules-btn">📖 Ver Regras</button>
   </div>
 </div>
 
@@ -173,11 +174,72 @@
   <div id="log-entries"></div>
 </div>
 
+<!-- ─── RULES MODAL ─── -->
+<div id="rules-modal" role="dialog" aria-modal="true" aria-label="Regras do Jogo">
+  <div class="rules-overlay"></div>
+  <div class="rules-content">
+    <button class="rules-close" id="rules-close-btn" aria-label="Fechar regras">✕</button>
+    <h2 class="rules-title">Regras do Wellington</h2>
+    <div class="rules-body">
+      <section class="rules-section">
+        <h3>🎯 Objetivo</h3>
+        <p>Termine o jogo com a menor pontuação possível. Cada carta tem um valor e o jogador com menos pontos ao final vence.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>🃏 Pontuação das Cartas</h3>
+        <ul>
+          <li><strong>K (Rei):</strong> 0 pontos</li>
+          <li><strong>Q (Dama):</strong> 12 pontos</li>
+          <li><strong>J (Valete):</strong> 11 pontos</li>
+          <li><strong>10:</strong> 10 pontos</li>
+          <li><strong>9 a 2:</strong> valor da carta</li>
+          <li><strong>Ás:</strong> 1 ponto</li>
+          <li><strong>Joker:</strong> -2 pontos</li>
+        </ul>
+      </section>
+
+      <section class="rules-section">
+        <h3>⚡ Habilidades Especiais</h3>
+        <p>Ao descartar certas cartas, você ativa habilidades:</p>
+        <ul>
+          <li><strong>5:</strong> Revele uma de suas cartas</li>
+          <li><strong>6:</strong> Revele uma carta de outro jogador</li>
+          <li><strong>7:</strong> Troque uma de suas cartas com a de outro jogador (sem ver)</li>
+          <li><strong>8:</strong> Revele duas cartas e escolha se quer trocar</li>
+          <li><strong>9 ou 10:</strong> Revele uma carta do monte (se tiver)</li>
+        </ul>
+      </section>
+
+      <section class="rules-section">
+        <h3>✂️ Regra do Corte</h3>
+        <p>Quando um jogador descarta uma carta, você tem <strong>3 segundos</strong> para cortar se tiver uma carta do mesmo valor. Ao cortar, descarta sua carta imediatamente e joga novamente.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>🏆 Wellington</h3>
+        <p>No final do seu turno, você pode declarar <strong>Wellington</strong>. Isso trava suas cartas — não pode mais trocá-las ou substituí-las. Se vencer, dobra os pontos ganhos. Se perder, dobra os pontos perdidos.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>⚖️ Desempate</h3>
+        <p>Se houver empate, vence quem tiver menos cartas. Se ainda empatar, vence quem tem a carta de menor valor individual.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>🎮 Como Jogar</h3>
+        <p>No seu turno: compre uma carta do monte ou do descarte, depois escolha uma carta para descartar ou substituir uma das suas 4 cartas.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
 <!-- ─── TOAST ─── -->
 <div id="toast" aria-live="assertive" aria-atomic="true"></div>
 
 <!-- ─── CONTROLS ─── -->
 <div id="controls">
+  <button id="rules-btn" title="Ver Regras">📖 Regras</button>
   <button id="undo-btn" title="Desfazer">↩ Desfazer</button>
   <button id="pause-btn" title="Pausar">⏸ Pausar</button>
   <button id="resume-btn" title="Retornar" style="display:none;">▶ Retornar</button>

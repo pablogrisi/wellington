@@ -99,6 +99,12 @@ const els = {
   pauseBtn: document.getElementById('pause-btn'),
   resumeBtn: document.getElementById('resume-btn'),
   newGameBtn: document.getElementById('new-game-btn'),
+  
+  // Rules modal
+  rulesOverlay: document.getElementById('rules-overlay'),
+  rulesCloseBtn: document.getElementById('rules-close-btn'),
+  rulesBtn: document.getElementById('rules-btn'),
+  gateRulesBtn: document.getElementById('gate-rules-btn'),
 };
 
 // ─── Card Image Mapping ───
@@ -1068,6 +1074,65 @@ if (els.resumeBtn) {
 if (els.newGameBtn) {
   els.newGameBtn.addEventListener('click', () => action('/api/new-game'));
 }
+
+// Rules modal
+let rulesOpenedWhilePlaying = false;
+
+function openRulesModal() {
+  if (els.rulesOverlay) {
+    // Check if game is active (not in gate and not game over)
+    const gameActive = !els.playerGate?.classList.contains('visible') && state.player_ready && !state.game_over;
+    
+    if (gameActive && !state.paused) {
+      rulesOpenedWhilePlaying = true;
+      action('/api/pause');
+    } else {
+      rulesOpenedWhilePlaying = false;
+    }
+    
+    els.rulesOverlay.classList.add('visible');
+  }
+}
+
+function closeRulesModal() {
+  if (els.rulesOverlay) {
+    els.rulesOverlay.classList.remove('visible');
+    
+    // Auto-resume if we paused the game when opening rules
+    if (rulesOpenedWhilePlaying && state.player_ready && !state.game_over) {
+      action('/api/resume');
+    }
+    rulesOpenedWhilePlaying = false;
+  }
+}
+
+if (els.rulesBtn) {
+  els.rulesBtn.addEventListener('click', openRulesModal);
+}
+
+if (els.gateRulesBtn) {
+  els.gateRulesBtn.addEventListener('click', openRulesModal);
+}
+
+if (els.rulesCloseBtn) {
+  els.rulesCloseBtn.addEventListener('click', closeRulesModal);
+}
+
+if (els.rulesOverlay) {
+  els.rulesOverlay.addEventListener('click', (e) => {
+    // Close when clicking the overlay background (not the content)
+    if (e.target === els.rulesOverlay) {
+      closeRulesModal();
+    }
+  });
+}
+
+// Close rules with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && els.rulesOverlay?.classList.contains('visible')) {
+    closeRulesModal();
+  }
+});
 
 // ─── Automation ───
 
