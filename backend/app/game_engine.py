@@ -819,13 +819,15 @@ class WellingtonGame:
             self._log(f"Habilidade da carta {card.rank} pendente para voce.")
         else:
             has_human_cut_opportunity = self._check_human_cut_opportunity(player_idx)
-            if has_human_cut_opportunity:
+            if has_human_cut_opportunity and player_idx != 0:
+                # Outro jogador descartou: abre janela de corte até o humano comprar.
                 self.pending_human_cut = True
-                # Se outro jogador descartou, o humano pode cortar ate comprar.
-                # Se foi o proprio descarte do humano, resolve corte e segue o fluxo da vez.
-                self.human_cut_available_until_draw = player_idx != 0
+                self.human_cut_available_until_draw = True
             else:
+                # Proprio descarte do humano: janela combinada (corte+Wellington) sera
+                # aberta por _finish_turn_after_play apos bots resolverem cortes.
                 self.pending_human_cut = False
+                self.human_cut_available_until_draw = False
 
         self.pending_bot_cut = self._has_bot_cut_candidates(player_idx)
         if self.pending_bot_cut:
@@ -892,7 +894,11 @@ class WellingtonGame:
             and self.wellington_caller is None
             and not player.locked
         ):
+            # Janela combinada: corte e Wellington no mesmo periodo de 3s.
             self.pending_human_wellington_window = True
+            if self._check_human_cut_opportunity(0):
+                self.pending_human_cut = True
+                self.human_cut_available_until_draw = False
             self._log("Janela de Wellington aberta por 3s.")
             return
 

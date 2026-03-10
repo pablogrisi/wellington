@@ -1004,7 +1004,12 @@ function renderInstructions() {
     // Show timer for cut phases
     const timerDisplay = cutCountdown > 0 ? ` (${cutCountdown}s)` : '';
     if (phase === 'cut-self') {
-      instruction = `Selecione uma de suas cartas para cortar${timerDisplay}`;
+      // Combined post-play window: cut and Wellington are both available
+      if (state.pending_human_wellington_window) {
+        instruction = `Corte sua carta ou declare Wellington${timerDisplay}`;
+      } else {
+        instruction = `Selecione uma de suas cartas para cortar${timerDisplay}`;
+      }
     } else {
       const transfer = state.pending_human_cut_other_transfer;
       const targetPlayerId = transfer ? Number(transfer.target_player) : NaN;
@@ -1053,8 +1058,9 @@ function renderTurnIndicator() {
 
 function renderWellingtonButton() {
   if (!els.btnWellington) return;
-
-  const canCall = state.actions?.can_call_wellington && phase === 'wellington';
+  // Enabled during both the combined post-play window (phase=cut-self) and
+  // the Wellington-only window (phase=wellington).
+  const canCall = !!state.actions?.can_call_wellington;
   els.btnWellington.disabled = !canCall;
 }
 
@@ -1079,13 +1085,22 @@ function renderCutCountdown() {
         if (cutCountdown <= 0) {
           clearInterval(cutTimerInterval);
           cutTimerInterval = null;
-          // Guard: only skip-cut if still pending (state may change during interval)
-          if (!state?.pending_human_cut) return;
-          // Auto-skip cut when timer expires
-          try {
-            await action("/api/action/skip-cut");
-          } catch (err) {
-            console.error("Failed to skip cut:", err);
+          if (!state?.pending_human_cut) return; // guard: state changed before timer fired
+          // Combined window (cut + Wellington): dismiss both with a single action
+          if (state?.pending_human_wellington_window) {
+            if (!state?.pending_human_wellington_window) return;
+            try {
+              await action("/api/action/pass-wellington-window");
+            } catch (err) {
+              console.error("Failed to pass wellington window:", err);
+            }
+          } else {
+            // Cut-only window (other player discarded): just skip the cut
+            try {
+              await action("/api/action/skip-cut");
+            } catch (err) {
+              console.error("Failed to skip cut:", err);
+            }
           }
         }
       }, 1000);
@@ -1487,10 +1502,13 @@ function scheduleCutAutoPass() {
 
 function scheduleWellingtonWindowAutoPass() {
   clearTimeout(wellingtonWindowTimer);
-  
+
   if (!state.pending_human_wellington_window) return;
-  
+  // Combined window: cut countdown handles the auto-pass, no separate timer needed.
+  if (state.pending_human_cut && !state.human_cut_available_until_draw) return;
+
   wellingtonWindowTimer = setTimeout(() => {
+    if (!state?.pending_human_wellington_window) return; // guard
     action('/api/action/pass-wellington-window');
   }, 3000);
 }
