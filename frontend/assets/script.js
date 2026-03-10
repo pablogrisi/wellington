@@ -242,10 +242,10 @@ function syncUiStateWithGame() {
   // Determine interaction phase
   if (state.pending_human_cut) {
     phase = 'cut-self';
-  } else if (state.pending_human_cut_other_transfer) {
-    phase = 'cut-other-transfer';
   } else if (state.drawn_card) {
     phase = 'replace';
+  } else if (state.pending_human_cut_other_transfer) {
+    phase = 'cut-other-transfer';
   } else if (state.pending_ability) {
     phase = 'ability';
   } else if (state.pending_human_wellington_window) {
@@ -701,9 +701,18 @@ function renderInstructions() {
     if (els.instructionHint) els.instructionHint.textContent = '';
     return;
   }
+
+  // If the human has a drawn card, the next required action is always discard/replace.
+  if (state.drawn_card) {
+    els.instructionHint.textContent = 'Escolha uma carta para descartar';
+    return;
+  }
+
+  // Some phases require a human action even when it is technically not our turn.
+  const requiresHumanInput = phase === 'cut-self' || phase === 'cut-other-transfer' || phase === 'replace';
   
   // If it's not our turn, show waiting message
-  if (state.current_player !== 0) {
+  if (state.current_player !== 0 && !requiresHumanInput) {
     const botName = state.players[state.current_player]?.name || 'Bot';
     els.instructionHint.textContent = `Aguarde ${botName}...`;
     return;
@@ -724,7 +733,7 @@ function renderInstructions() {
       instruction = `Selecione uma de suas cartas para enviar para ${targetName}${timerDisplay}`;
     }
   } else if (phase === 'replace') {
-    instruction = 'Escolha uma de suas cartas para enviar ao Bot que descartou';
+    instruction = 'Escolha uma carta para descartar';
   } else if (phase === 'ability') {
     instruction = 'Aguarde instruções da habilidade ativada';
   } else if (phase === 'wellington') {
