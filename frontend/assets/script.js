@@ -37,7 +37,7 @@ let cutCountdown = 3;
 // Ability state tracking
 let abilitySelection = { own_slot: null, target_player: null, target_slot: null };
 let lastBotSwapVisualId = null;
-let lastBotSwapFallbackEventKey = '';
+let lastProcessedLegacyAction = '';
 let previousLogEntries = [];
 const pendingSwapVisualEvents = [];
 let isSwapVisualRunning = false;
@@ -462,13 +462,12 @@ function enqueueSwapEvent(event) {
 function enqueueSwapVisualEventsFromState() {
   const currentLog = Array.isArray(state?.log) ? state.log.slice() : [];
   const actionText = String(state?.last_bot_action || '');
-  const fallbackKey = `${actionText}|${currentLog.join('\n')}`;
 
   // Source 1: structured bot_swap_visual (highest priority — blocks other sources)
   const visual = state?.bot_swap_visual;
   if (visual && Number.isInteger(visual.id) && visual.id !== lastBotSwapVisualId) {
     lastBotSwapVisualId = visual.id;
-    lastBotSwapFallbackEventKey = fallbackKey; // block log-delta and legacy for same event
+    lastProcessedLegacyAction = actionText; // block legacy fallback for this swap
     previousLogEntries = currentLog;
     enqueueSwapEvent({
       fromPlayer: Number(visual.from_player),
@@ -505,14 +504,15 @@ function enqueueSwapVisualEventsFromState() {
   }
 
   // Source 3: legacy last_bot_action fallback (only when log didn't fire)
+  // Deduplicated by actionText only — log content changes must not retrigger same swap.
   if (!firedFromLog) {
     const mLegacy = actionText.match(/^(.*?) jogou um (7|8) e (trocou cartas com|comparou cartas com) (.*?)\./i);
-    if (mLegacy && fallbackKey !== lastBotSwapFallbackEventKey) {
-      lastBotSwapFallbackEventKey = fallbackKey;
+    if (mLegacy && actionText !== lastProcessedLegacyAction) {
+      lastProcessedLegacyAction = actionText;
       enqueueSwapEvent({ fromName: mLegacy[1], toName: mLegacy[4], fromSlot: -1, toSlot: -1, ability: mLegacy[2], didSwap: mLegacy[3].toLowerCase().includes('trocou') });
     }
   } else {
-    lastBotSwapFallbackEventKey = fallbackKey; // block legacy for same event
+    lastProcessedLegacyAction = actionText; // block legacy for same event
   }
 }
 
@@ -1079,6 +1079,8 @@ function renderCutCountdown() {
         if (cutCountdown <= 0) {
           clearInterval(cutTimerInterval);
           cutTimerInterval = null;
+          // Guard: only skip-cut if still pending (state may change during interval)
+          if (!state?.pending_human_cut) return;
           // Auto-skip cut when timer expires
           try {
             await action("/api/action/skip-cut");

@@ -437,6 +437,9 @@ class WellingtonGame:
             if self.human_cut_available_until_draw:
                 self.pending_human_cut = False
                 self._log("Voce passou no corte por enquanto.")
+                # Process the discard that triggered this cut window so the turn advances.
+                if self.pending_discard_resolution is not None and not self.pending_bot_cut:
+                    self._process_pending_discard_flow()
                 return
             self.pending_human_cut = False
             self._log("Voce passou no corte.")
