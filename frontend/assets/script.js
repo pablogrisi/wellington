@@ -18,7 +18,7 @@ let lastWellingtonCaller = null;
 let lastWinnerKey = null;
 const botVisualAnimations = {};
 let botCutReadyAt = 0;
-const playerGridHtmlCache = {};
+const playerCardHtmlCache = {}; // cache for card slots only (excludes bot animation extra slot)
 let discardHtmlCache = null;
 let drawnHtmlCache = null;
 let logHtmlCache = null;
@@ -810,11 +810,35 @@ function renderPlayers() {
       }
     }
 
-    const nextGridHtml = extraBotHtml + cardsHtml;
     playerEl.grid.classList.toggle('has-bot-extra', !!extraBotHtml);
-    if (playerGridHtmlCache[pos] !== nextGridHtml) {
-      playerEl.grid.innerHTML = nextGridHtml;
-      playerGridHtmlCache[pos] = nextGridHtml;
+
+    // ── Update card slots only when they actually changed (avoids img flicker) ──
+    if (playerCardHtmlCache[pos] !== cardsHtml) {
+      // Detach the animation extra-slot before rebuilding so it isn't clobbered
+      const existingExtra = playerEl.grid.querySelector('.card-slot.bot-drawn-extra');
+      if (existingExtra) existingExtra.remove();
+      playerEl.grid.innerHTML = cardsHtml;
+      playerCardHtmlCache[pos] = cardsHtml;
+      // Re-attach preserved extra slot if still needed
+      if (existingExtra && extraBotHtml) {
+        playerEl.grid.insertBefore(existingExtra, playerEl.grid.firstChild);
+      }
+    }
+
+    // ── Manage the animation extra-slot independently (no card rebuild needed) ──
+    const curExtraEl = playerEl.grid.querySelector('.card-slot.bot-drawn-extra');
+    if (extraBotHtml && !curExtraEl) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = extraBotHtml;
+      playerEl.grid.insertBefore(tmp.firstChild, playerEl.grid.firstChild);
+    } else if (!extraBotHtml && curExtraEl) {
+      curExtraEl.remove();
+    } else if (extraBotHtml && curExtraEl) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = extraBotHtml;
+      if (curExtraEl.outerHTML !== tmp.firstChild.outerHTML) {
+        curExtraEl.replaceWith(tmp.firstChild);
+      }
     }
   }
 }

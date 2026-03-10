@@ -198,7 +198,8 @@ body {
   border-radius: var(--radius-card);
   animation: swapPulseOrigin 0.4s ease-in-out infinite alternate;
   position: relative;
-  z-index: 5;
+  /* Must be above the swap overlay (z 9500) so the card is visible through the dark backdrop */
+  z-index: 9600;
 }
 
 .card-slot.swap-target {
@@ -208,7 +209,7 @@ body {
   border-radius: var(--radius-card);
   animation: swapPulseTarget 0.4s ease-in-out infinite alternate;
   position: relative;
-  z-index: 5;
+  z-index: 9600;
 }
 
 .card-slot.swap-confirm {
@@ -218,7 +219,7 @@ body {
   border-radius: var(--radius-card);
   animation: swapPulseConfirm 0.3s ease-in-out infinite alternate;
   position: relative;
-  z-index: 5;
+  z-index: 9600;
 }
 
 @keyframes swapPulseOrigin {
@@ -337,7 +338,7 @@ body {
   height: 6px;
   border-radius: 999px;
   transform-origin: left center;
-  z-index: 9400;
+  z-index: 9600;
   pointer-events: none;
   background: linear-gradient(90deg, rgba(86,173,255,0.95), rgba(255,215,0,1), rgba(255,133,120,0.95));
   box-shadow: 0 0 14px rgba(255,215,0,0.95), 0 0 26px rgba(255,215,0,0.75);
@@ -1339,7 +1340,8 @@ body {
 
 /* ─── Active turn highlight ─── */
 .player-area.active-turn .card-grid {
-  filter: drop-shadow(0 0 8px rgba(201,168,76,0.5));
+  box-shadow: 0 0 16px 5px rgba(201,168,76,0.45);
+  border-radius: 6px;
 }
 .player-area.active-turn .player-label { color: var(--gold-light); }
 
