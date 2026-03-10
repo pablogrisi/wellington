@@ -2,45 +2,251 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Wellington</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Wellington — Jogo de Cartas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
-  <main class="layout">
-    <header class="topbar">
-      <h1>Wellington</h1>
-      <div class="actions-inline">
-        <button id="pause-btn">Pause</button>
-        <button id="resume-btn">Retomar</button>
-        <button id="undo-btn">Voltar</button>
-        <button id="new-game-btn">Nova partida</button>
-      </div>
-    </header>
 
-    <section class="status" id="status"></section>
-
-    <section class="table" id="table"></section>
-
-    <section class="controls" id="controls"></section>
-
-    <section class="log">
-      <h2>Log</h2>
-      <div id="log-list" class="log-list"></div>
-    </section>
-  </main>
-
-  <div id="player-gate" class="player-gate hidden" role="dialog" aria-modal="true" aria-labelledby="player-gate-title">
-    <form id="player-gate-form" class="player-gate-card">
-      <h2 id="player-gate-title">Antes de jogar</h2>
-      <p>Digite seu nome para iniciar a sua sessao.</p>
-      <input id="player-name-input" type="text" maxlength="24" autocomplete="name" placeholder="Seu nome" required />
-      <small id="player-gate-error" class="player-gate-error"></small>
-      <button id="player-gate-submit" type="submit" class="primary">Entrar</button>
+<!-- Player Name Gate -->
+<div id="player-gate" style="display: none;">
+  <div class="gate-content">
+    <h1 class="gate-title">WELLINGTON</h1>
+    <form id="player-gate-form">
+      <input type="text" id="player-name-input" placeholder="Seu nome" maxlength="24" required />
+      <button type="submit" class="btn btn-primary">Começar</button>
+      <div id="player-gate-error" class="gate-error"></div>
     </form>
+    <button type="button" class="btn-rules-link" id="gate-rules-btn">📖 Ver Regras</button>
+  </div>
+</div>
+
+<!-- ═══════════════ GAME TABLE ═══════════════ -->
+<div id="game-table">
+
+  <div id="game-logo">WELLINGTON</div>
+  <div id="phase-banner">WELLINGTON!</div>
+
+  <!-- ── TOP ZONE: Bot Topo ── -->
+  <div id="top-zone">
+    <div class="player-area" id="player-top">
+      <div class="player-label">
+        <span class="turn-dot"></span>
+        <span id="name-top">Bot Alfa</span>
+        <span class="score-badge" id="score-top">?</span>
+      </div>
+      <span class="player-status" id="status-top"></span>
+      <div class="card-grid" id="grid-top"></div>
+    </div>
   </div>
 
-  <script src="/assets/script.js"></script>
+  <!-- ── MIDDLE ZONE ── -->
+  <div id="middle-zone">
+
+    <!-- Left Bot -->
+    <div class="side-bot player-area" id="player-left">
+      <div class="player-label">
+        <span class="turn-dot"></span>
+        <span id="name-left">Bot Beta</span>
+        <span class="score-badge" id="score-left">?</span>
+      </div>
+      <span class="player-status" id="status-left"></span>
+      <div class="card-grid" id="grid-left"></div>
+    </div>
+
+    <!-- Center: Deck + Discard + Drawn Card -->
+    <div id="center-area">
+      <div class="pile-area">
+        <div class="pile-label">Monte</div>
+        <div class="deck-stack" id="deck" role="button" tabindex="0" title="Clique para comprar uma carta" aria-label="Monte — clique para comprar">
+          <div class="deck-card"></div>
+          <div class="deck-card"></div>
+          <div class="deck-card"></div>
+        </div>
+        <div class="deck-count"><span id="deck-count">32</span> cartas</div>
+      </div>
+
+      <div id="turn-indicator">SUA VEZ</div>
+
+      <div class="pile-area">
+        <div class="pile-label">Descarte</div>
+        <div class="discard-area">
+          <div class="card-slot" id="discard-top-slot">
+            <div class="card-inner">
+              <div class="card-face" id="discard-face"></div>
+              <div class="card-back"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="drawn-card-area">
+        <div class="area-label">Em mão</div>
+        <div class="card-slot" id="drawn-card-preview" tabindex="-1" aria-label="Carta em mão — clique para descartar">
+          <div class="card-inner">
+            <div class="card-face" id="drawn-face"></div>
+            <div class="card-back"></div>
+          </div>
+        </div>
+        <div id="drawn-card-hint"></div>
+      </div>
+    </div>
+
+    <!-- Right Bot -->
+    <div class="side-bot player-area" id="player-right">
+      <div class="player-label">
+        <span class="turn-dot"></span>
+        <span id="name-right">Bot Gama</span>
+        <span class="score-badge" id="score-right">?</span>
+      </div>
+      <span class="player-status" id="status-right"></span>
+      <div class="card-grid" id="grid-right"></div>
+    </div>
+
+  </div>
+
+  <!-- ── BOTTOM ZONE: Human Player ── -->
+  <div id="bottom-zone">
+    <div class="player-area human" id="player-human">
+      <div class="player-label human">
+        <span class="turn-dot"></span>
+        <span id="name-human">Você</span>
+        <span class="score-badge" id="score-human">?</span>
+      </div>
+      <span class="player-status" id="status-human"></span>
+      <div class="card-grid" id="grid-human"></div>
+    </div>
+
+    <!-- Action Panel -->
+    <div id="action-panel">
+      <div id="instruction-hint"></div>
+      <div id="action-hint"></div>
+      <button class="btn btn-wellington" id="btn-wellington" title="Declarar WELLINGTON">
+        WELLINGTON
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── CUT COUNTDOWN ─── -->
+<div id="cut-countdown" role="status" aria-live="polite">
+  <div class="cut-title">Janela de Corte</div>
+  <div class="cut-timer" id="cut-timer">3</div>
+  <div class="cut-hint">Clique em uma carta para cortar ou aguarde</div>
+</div>
+
+<!-- ─── ABILITY PANEL ─── -->
+<div id="ability-panel" role="dialog" aria-modal="true" aria-label="Habilidade ativada">
+  <div class="ability-card-badge" id="ability-card-name">J♦</div>
+  <div class="ability-title" id="ability-title">Habilidade Ativada</div>
+  <div class="ability-desc" id="ability-desc">Selecione uma de suas cartas para revelar.</div>
+</div>
+
+<!-- ─── ABILITY 8 SWAP MODAL ─── -->
+<div id="ability8-modal" role="dialog" aria-modal="true" aria-label="Decisão de troca">
+  <div class="ability8-content">
+    <h2 class="ability8-title">Habilidade 8: Trocar Cartas?</h2>
+    <div class="ability8-cards">
+      <div class="ability8-card-info">
+        <div class="ability8-label">Sua carta (slot <span id="ability8-own-slot"></span>):</div>
+        <div class="ability8-card-value" id="ability8-own-card"></div>
+      </div>
+      <div class="ability8-swap-icon">⇄</div>
+      <div class="ability8-card-info">
+        <div class="ability8-label">Carta do oponente (slot <span id="ability8-target-slot"></span>):</div>
+        <div class="ability8-card-value" id="ability8-target-card"></div>
+      </div>
+    </div>
+    <div class="ability8-buttons">
+      <button class="btn btn-primary" id="btn-ability8-swap">Trocar</button>
+      <button class="btn btn-secondary" id="btn-ability8-no-swap">Não trocar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── GAME LOG ─── -->
+<button id="game-log-toggle" title="Log do jogo" aria-label="Abrir log do jogo">&#128203;</button>
+<div id="game-log" role="log" aria-label="Log do Jogo">
+  <div class="log-title">Log do Jogo</div>
+  <div id="log-entries"></div>
+</div>
+
+<!-- ─── RULES MODAL ─── -->
+<div id="rules-overlay" class="rules-overlay">
+  <div class="rules-content">
+    <button class="rules-close" id="rules-close-btn" aria-label="Fechar regras">✕</button>
+    <div class="rules-header">
+      <h2>Regras do Wellington</h2>
+    </div>
+    <div class="rules-body">
+      <section class="rules-section">
+        <h3>🎯 Objetivo</h3>
+        <p>Termine o jogo com a menor pontuação possível. Cada carta tem um valor e o jogador com menos pontos ao final vence.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>🃏 Pontuação das Cartas</h3>
+        <ul>
+          <li><strong>K (Rei):</strong> -1 ponto</li>
+          <li><strong>Q (Dama):</strong> 12 pontos</li>
+          <li><strong>J (Valete):</strong> 11 pontos</li>
+          <li><strong>2 a 10:</strong> valor da carta</li>
+          <li><strong>Ás:</strong> 0 pontos</li>
+          <li><strong>Joker:</strong> -2 pontos</li>
+        </ul>
+      </section>
+
+      <section class="rules-section">
+        <h3>⚡ Habilidades Especiais</h3>
+        <p>Ao descartar certas cartas, você ativa habilidades:</p>
+        <ul>
+          <li><strong>5:</strong> Revele uma de suas cartas</li>
+          <li><strong>6:</strong> Revele uma carta de outro jogador</li>
+          <li><strong>7:</strong> Troque uma de suas cartas com a de outro jogador (sem ver)</li>
+          <li><strong>8:</strong> Revele uma carta sua e uma carta de outro jogador, e escolha se quer trocar ou não</li>
+        </ul>
+      </section>
+
+      <section class="rules-section">
+        <h3>✂️ Regra do Corte</h3>
+        <p>Quando um jogador descarta uma carta, você tem <strong>3 segundos</strong> para cortar se tiver uma carta do mesmo valor. Ao cortar, você só descarta sua carta imediatamente.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>🏆 Wellington</h3>
+        <p>No final do seu turno, você pode declarar <strong>Wellington</strong>. Isso trava suas cartas — não pode mais trocá-las ou substituí-las. Quando chegar a vez de quem pediu Wellington, <strong>todas as cartas de todos os jogadores são reveladas</strong> e, em seguida, os pontos de todo mundo são contados.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>⚖️ Desempate</h3>
+        <p>Em caso de empate, vence o jogador que não pediu Wellington. Se o empate for entre dois jogadores que não pediram Wellington, o resultado termina em empate.</p>
+      </section>
+
+      <section class="rules-section">
+        <h3>🎮 Como Jogar</h3>
+        <p>No seu turno, você sempre começa comprando uma carta do monte. Depois escolhe uma carta para descartar (a que comprou ou uma que já tinha) e substitui pela carta comprada.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST ─── -->
+<div id="toast" aria-live="assertive" aria-atomic="true"></div>
+
+<!-- ─── CONTROLS ─── -->
+<div id="controls">
+  <button id="rules-btn" title="Ver Regras">📖 Regras</button>
+  <button id="undo-btn" title="Desfazer">↩ Desfazer</button>
+  <button id="pause-btn" title="Pausar">⏸ Pausar</button>
+  <button id="resume-btn" title="Retornar" style="display:none;">▶ Retornar</button>
+  <button id="new-game-btn" title="Novo Jogo">🔄 Novo Jogo</button>
+</div>
+
+<!-- ─── SCRIPT ─── -->
+<script src="/assets/script.js?v=20260310b"></script>
+
 </body>
 </html>
-

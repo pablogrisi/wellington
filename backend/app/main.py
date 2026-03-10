@@ -3,6 +3,7 @@ import threading
 import json
 import logging
 import os
+import sqlite3
 from collections import deque
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ import re
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -32,11 +33,15 @@ app.add_middleware(
 )
 
 SESSION_COOKIE_NAME = "wellington_sid"
+ADMIN_COOKIE_NAME = "wellington_admin"
 UNDO_LIMIT = 60
 SESSIONS_LOCK = threading.Lock()
+ADMIN_SESSIONS_LOCK = threading.Lock()
 PLAYER_NAME_RE = re.compile(r"^[A-Za-z0-9_ .-]{3,24}$")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+ADMIN_LOGS_PASSWORD = os.getenv("ADMIN_LOGS_PASSWORD", "logsjogo")
+ACTIVITY_DB_PATH = Path(__file__).resolve().parents[1] / "player_activity.db"
 logger = logging.getLogger("wellington")
 
 
@@ -51,6 +56,71 @@ class SessionState:
 
 
 SESSIONS: Dict[str, SessionState] = {}
+ADMIN_TOKENS: set[str] = set()
+
+
+def _init_activity_db() -> None:
+    with sqlite3.connect(ACTIVITY_DB_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS game_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                player_name TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                event_time TEXT NOT NULL,
+                user_agent TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_game_events_player_time
+            ON game_events(player_name, event_time)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_game_events_type
+            ON game_events(event_type)
+            """
+        )
+        conn.commit()
+
+
+def record_local_event(
+    session_id: str,
+    player_name: str,
+    event_type: str,
+    event_time: Optional[str] = None,
+    user_agent: str = "",
+) -> None:
+    if event_time is None:
+        event_time = datetime.now(timezone.utc).isoformat()
+
+    _init_activity_db()
+    with sqlite3.connect(ACTIVITY_DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO game_events(session_id, player_name, event_type, event_time, user_agent)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (session_id, player_name, event_type, event_time, user_agent[:240]),
+        )
+        conn.commit()
+
+
+def is_admin_authenticated(request: Request) -> bool:
+    token = request.cookies.get(ADMIN_COOKIE_NAME)
+    if not token:
+        return False
+    with ADMIN_SESSIONS_LOCK:
+        return token in ADMIN_TOKENS
+
+
+def require_admin(request: Request) -> None:
+    if not is_admin_authenticated(request):
+        raise HTTPException(status_code=401, detail="Acesso negado.")
 
 
 def get_or_create_session(session_id: Optional[str]) -> tuple[str, SessionState, bool]:
@@ -127,6 +197,7 @@ def safe_action(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
+            logger.exception(f"Erro interno no servidor: {exc}")
             raise HTTPException(status_code=500, detail=f"Erro interno no servidor: {exc}") from exc
 
 
@@ -152,6 +223,10 @@ class PlayerStartPayload(BaseModel):
     name: str
 
 
+class AdminLoginPayload(BaseModel):
+    password: str
+
+
 def normalize_player_name(raw_name: str) -> str:
     name = " ".join(raw_name.strip().split())
     if not PLAYER_NAME_RE.fullmatch(name):
@@ -165,6 +240,14 @@ def persist_player_start_event(
     started_at: str,
     user_agent: str,
 ) -> None:
+    record_local_event(
+        session_id=session_id,
+        player_name=player_name,
+        event_type="player_start",
+        event_time=started_at,
+        user_agent=user_agent,
+    )
+
     logger.info(
         "event=player_start session_id=%s player_name=%s started_at=%s",
         session_id,
@@ -223,6 +306,12 @@ def player_start(payload: PlayerStartPayload, request: Request):
             started_at=session.player_started_at,
             user_agent=request.headers.get("user-agent", ""),
         )
+        record_local_event(
+            session_id=session_id,
+            player_name=normalized_name,
+            event_type="new_game",
+            user_agent=request.headers.get("user-agent", ""),
+        )
         return build_public_state(session)
 
 
@@ -238,6 +327,12 @@ def new_game(request: Request):
                 "event=new_game session_id=%s player_name=%s",
                 request.state.session_id,
                 session.player_name,
+            )
+            record_local_event(
+                session_id=request.state.session_id,
+                player_name=session.player_name,
+                event_type="new_game",
+                user_agent=request.headers.get("user-agent", ""),
             )
         return build_public_state(session)
 
@@ -346,8 +441,93 @@ def action_undo(request: Request):
         return build_public_state(session)
 
 
+@app.post("/api/admin/login")
+def admin_login(payload: AdminLoginPayload):
+    if payload.password != ADMIN_LOGS_PASSWORD:
+        raise HTTPException(status_code=401, detail="Senha incorreta.")
+
+    token = secrets.token_urlsafe(24)
+    with ADMIN_SESSIONS_LOCK:
+        ADMIN_TOKENS.add(token)
+
+    response = JSONResponse(content={"ok": True})
+    response.set_cookie(
+        key=ADMIN_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 12,
+    )
+    return response
+
+
+@app.post("/api/admin/logout")
+def admin_logout(request: Request):
+    token = request.cookies.get(ADMIN_COOKIE_NAME)
+    if token:
+        with ADMIN_SESSIONS_LOCK:
+            ADMIN_TOKENS.discard(token)
+    response = JSONResponse(content={"ok": True})
+    response.delete_cookie(ADMIN_COOKIE_NAME)
+    return response
+
+
+@app.get("/api/admin/logs")
+def admin_logs_api(request: Request):
+    require_admin(request)
+    _init_activity_db()
+    with sqlite3.connect(ACTIVITY_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        summary_rows = conn.execute(
+            """
+            SELECT
+                player_name,
+                MIN(event_time) AS first_played_at,
+                MAX(event_time) AS last_activity_at,
+                SUM(CASE WHEN event_type = 'new_game' THEN 1 ELSE 0 END) AS matches_played,
+                COUNT(DISTINCT session_id) AS sessions
+            FROM game_events
+            GROUP BY player_name
+            ORDER BY last_activity_at DESC
+            """
+        ).fetchall()
+        recent_rows = conn.execute(
+            """
+            SELECT session_id, player_name, event_type, event_time
+            FROM game_events
+            ORDER BY event_time DESC
+            LIMIT 100
+            """
+        ).fetchall()
+
+    return {
+        "players": [dict(row) for row in summary_rows],
+        "recent_events": [dict(row) for row in recent_rows],
+    }
+
+
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
-app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR)), name="assets")
+app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets"), html=False), name="assets")
+
+
+@app.get("/admin")
+def admin_root():
+    return FileResponse(FRONTEND_DIR / "admin-login.html")
+
+
+@app.get("/admin/logs")
+def admin_logs_page(request: Request):
+    require_admin(request)
+    return FileResponse(FRONTEND_DIR / "admin-logs.html")
+
+
+@app.get("/assets/cards/{filename}")
+async def get_card_image(filename: str):
+    """Serve card images from assets/cards directory."""
+    card_path = FRONTEND_DIR / "assets" / "cards" / filename
+    if card_path.exists():
+        return FileResponse(card_path)
+    return {"error": "File not found"}
 
 
 @app.get("/")

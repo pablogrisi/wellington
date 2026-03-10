@@ -1,7 +1,10 @@
 ﻿import random
+import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+logger = logging.getLogger("wellington")
 
 RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 SUITS = ["S", "H", "D", "C"]
@@ -64,6 +67,7 @@ class WellingtonGame:
         self.pending_human_cut_other_transfer: Optional[Dict[str, Any]] = None
         self.pending_discard_resolution: Optional[Dict[str, Any]] = None
         self.pending_bot_cut: bool = False
+        self.pending_bot_cut_action: Optional[Dict[str, Any]] = None
         self.human_cut_available_until_draw: bool = False
         self.pending_human_wellington_window: bool = False
         self.paused: bool = False
@@ -72,6 +76,8 @@ class WellingtonGame:
         self.bot_visual: Dict[int, Dict[str, Any]] = {}
         self.human_known_other: Dict[tuple[int, int], str] = {}
         self.log: List[str] = []
+        self.last_bot_action: Optional[str] = None
+        self.cut_window_opened_at: Optional[float] = None
 
     def new_game(self) -> None:
         deck = self._build_deck()
@@ -109,6 +115,7 @@ class WellingtonGame:
         self.bot_visual = {}
         self.human_known_other = {}
         self.log = ["Nova partida iniciada."]
+        self.last_bot_action = None
 
     def to_state_dict(self) -> Dict[str, Any]:
         return {
@@ -220,6 +227,7 @@ class WellingtonGame:
                 if self.pending_discard_resolution is not None:
                     self._resolve_bot_cuts(int(self.pending_discard_resolution["player"]))
                 self.pending_bot_cut = False
+                self.cut_window_opened_at = None
                 self._process_pending_discard_flow()
                 continue
             if (
@@ -239,8 +247,14 @@ class WellingtonGame:
         if self.pending_human_cut_other_transfer is not None:
             return False
         if self.pending_bot_cut:
-            return not self.game_over and not self.paused
-        return (
+            # Check if cut window delay (2.5 seconds) has passed
+            if self.cut_window_opened_at is not None:
+                elapsed = time.time() - self.cut_window_opened_at
+                if elapsed < 2.5:
+                    return False
+            result = not self.game_over and not self.paused
+            return result
+        result = (
             not self.game_over
             and not self.paused
             and self.current_player != 0
@@ -248,6 +262,7 @@ class WellingtonGame:
             and self.pending_human_cut_other_transfer is None
             and self.pending_ability is None
         )
+        return result
 
     def bot_step(self) -> bool:
         if not self.can_bot_step():
@@ -255,8 +270,11 @@ class WellingtonGame:
         if self.pending_bot_cut:
             if self.pending_discard_resolution is not None:
                 self._resolve_bot_cuts(int(self.pending_discard_resolution["player"]))
-            self.pending_bot_cut = False
-            self._process_pending_discard_flow()
+            # Só limpa pending_bot_cut se não há mais cortes agendados
+            if not self.pending_bot_cut_action:
+                self.pending_bot_cut = False
+                self.cut_window_opened_at = None
+                self._process_pending_discard_flow()
             return True
         self._bot_turn(self.current_player)
         return True
@@ -319,6 +337,7 @@ class WellingtonGame:
         player.known_slots.add(slot)
 
         self.discard_pile.append(old)
+        
         self._log(f"Voce trocou slot {slot} por {new_card.label()} e descartou {old.label()}.")
 
         self._on_discard(player_idx=0, card=old)
@@ -444,7 +463,8 @@ class WellingtonGame:
             target.cards[transfer_target_slot] = give_card
             human.cards[give_slot] = None
             human.known_slots.discard(give_slot)
-            self._forget_human_knowledge(transfer_target_player, transfer_target_slot)
+            # O humano ja conhecia a carta enviada, entao o conhecimento acompanha a carta no novo slot.
+            self.human_known_other[(transfer_target_player, transfer_target_slot)] = give_card.label()
             self.pending_human_cut_other_transfer = None
             self._log(
                 f"Voce enviou sua carta do slot {give_slot} para {target.name}, slot {transfer_target_slot}."
@@ -602,7 +622,7 @@ class WellingtonGame:
             "pending_ability": ability,
             "pending_ability8_preview": self.pending_ability8_preview,
             "pending_bot_turn": self.pending_bot_turn,
-            "can_bot_step": self.can_bot_step(),
+            "last_bot_action": self.last_bot_action,
             "bot_delay_ms": 3000,
             "bot_cut_delay_ms": 2500,
             "players": players_payload,
@@ -617,6 +637,7 @@ class WellingtonGame:
                 "can_cut": self._can_human_cut_now(),
                 "can_send_cut_other_card": self.pending_human_cut_other_transfer is not None,
                 "send_cut_other_slots": self._human_send_cut_other_slots(),
+                "can_bot_step": self.can_bot_step(),
             },
         }
 
@@ -747,6 +768,8 @@ class WellingtonGame:
 
         self.pending_bot_cut = self._has_bot_cut_candidates(player_idx)
         if self.pending_bot_cut:
+            # Record when the cut window opened for the 2.5 second delay
+            self.cut_window_opened_at = time.time()
             return
 
         self._process_pending_discard_flow()
@@ -765,6 +788,17 @@ class WellingtonGame:
         self.current_player = next_idx
         self.drawn_card = None
         self.pending_human_wellington_window = False
+        self.last_bot_action = None
+
+        current = self.players[self.current_player]
+        current_has_cards = any(c is not None for c in current.cards)
+        if self.wellington_caller is None and not current.locked and not current_has_cards:
+            self.wellington_caller = self.current_player
+            self.wellington_waiting_return = True
+            current.locked = True
+            self._log(f"{current.name} chamou Wellington automaticamente (sem cartas na vez).")
+            self._advance_turn()
+            return
 
         if self.players[self.current_player].is_bot:
             return
@@ -776,6 +810,7 @@ class WellingtonGame:
         self.pending_human_cut_other_transfer = None
         self.pending_discard_resolution = None
         self.pending_bot_cut = False
+        self.cut_window_opened_at = None
         self.human_cut_available_until_draw = False
         self.pending_ability = None
         self.pending_ability8_preview = None
@@ -803,8 +838,14 @@ class WellingtonGame:
             and self.wellington_caller is None
             and not player.locked
         ):
-            total = sum(c.points for c in player.cards if c is not None)
-            if total <= 3 and self.random.random() < 0.45:
+            non_empty_slots = [i for i, c in enumerate(player.cards) if c is not None]
+            all_cards_known = all(slot in player.known_slots for slot in non_empty_slots)
+            if all_cards_known:
+                total = sum(player.cards[slot].points for slot in non_empty_slots if player.cards[slot] is not None)
+            else:
+                total = None
+
+            if total is not None and total <= 3 and self.random.random() < 0.45:
                 self.wellington_caller = player_idx
                 self.wellington_waiting_return = True
                 player.locked = True
@@ -957,6 +998,7 @@ class WellingtonGame:
             unknown_own = [s for s in own_slots if s not in player.known_slots]
             slot = self.random.choice(unknown_own if unknown_own else own_slots)
             self._ability_5(player_idx, slot)
+            self.last_bot_action = f"{player.name} jogou um 5 e revelou uma de suas cartas."
             return
         if rank == "6":
             candidates = [i for i in range(len(self.players)) if i != player_idx and not self.players[i].locked]
@@ -968,6 +1010,8 @@ class WellingtonGame:
                 return
             slot = self.random.choice(t_slots)
             self._ability_6(player_idx, t, slot)
+            target_name = "você" if t == 0 else self.players[t].name
+            self.last_bot_action = f"{player.name} jogou um 6 e viu uma carta de {target_name}."
             self._log(f"{player.name} usou habilidade 6.")
             return
         if rank == "7":
@@ -981,6 +1025,8 @@ class WellingtonGame:
             own_slot = self.random.choice(own_slots)
             target_slot = self.random.choice(t_slots)
             self._ability_7(player_idx, own_slot, t, target_slot)
+            target_name = "você" if t == 0 else self.players[t].name
+            self.last_bot_action = f"{player.name} jogou um 7 e trocou cartas com {target_name}."
             return
         if rank == "8":
             candidates = [i for i in range(len(self.players)) if i != player_idx and not self.players[i].locked]
@@ -996,6 +1042,9 @@ class WellingtonGame:
             target_card = self.players[t].cards[target_slot]
             do_swap = own_card is not None and target_card is not None and target_card.points < own_card.points
             self._ability_8(player_idx, own_slot, t, target_slot, do_swap)
+            target_name = "você" if t == 0 else self.players[t].name
+            action_text = "trocou cartas com" if do_swap else "comparou cartas com"
+            self.last_bot_action = f"{player.name} jogou um 8 e {action_text} {target_name}."
             return
 
     # ---------- Cuts ----------
@@ -1004,6 +1053,42 @@ class WellingtonGame:
         return self.discard_pile[-1] if self.discard_pile else None
 
     def _resolve_bot_cuts(self, discarder_idx: int) -> None:
+        """Processa UM corte de bot por vez com visual state."""
+        top = self._top_discard()
+        if top is None:
+            return
+
+        # Se já tem uma ação de corte pendente, executar ela agora
+        if self.pending_bot_cut_action:
+            action = self.pending_bot_cut_action
+            idx = action["player_idx"]
+            slot = action["slot"]
+            p = self.players[idx]
+            card = p.cards[slot]
+            
+            # Executar o corte
+            p.cards[slot] = None
+            p.known_slots.discard(slot)
+            self._forget_human_knowledge(idx, slot)
+            self.discard_pile.append(card)
+            self._log(f"{p.name} cortou com {card.label()} (slot {slot}).")
+            
+            # Limpar a ação pendente
+            self.pending_bot_cut_action = None
+            
+            # Limpar o visual state
+            if idx in self.bot_visual:
+                self.bot_visual[idx] = {"clear_on": "next_bot_step"}
+            
+            # Verificar se há mais cortes possíveis
+            self._check_and_queue_next_cut(discarder_idx)
+            return
+        
+        # Verificar se há algum bot que pode cortar
+        self._check_and_queue_next_cut(discarder_idx)
+
+    def _check_and_queue_next_cut(self, discarder_idx: int) -> None:
+        """Verifica se há bots que podem cortar e agenda o próximo."""
         top = self._top_discard()
         if top is None:
             return
@@ -1012,6 +1097,7 @@ class WellingtonGame:
             (discarder_idx + offset) % len(self.players)
             for offset in range(1, len(self.players))
         ]
+        
         for idx in order:
             if idx == 0:
                 continue
@@ -1028,14 +1114,30 @@ class WellingtonGame:
             if self.random.random() > 0.60:
                 continue
 
+            # Encontrou um bot que vai cortar - agendar a ação visual
             slot = self.random.choice(matching_known)
             card = p.cards[slot]
-            p.cards[slot] = None
-            p.known_slots.discard(slot)
-            self._forget_human_knowledge(idx, slot)
-            self.discard_pile.append(card)
-            self._log(f"{p.name} cortou com {card.label()} (slot {slot}).")
-            top = card
+            
+            self.pending_bot_cut_action = {
+                "player_idx": idx,
+                "slot": slot,
+                "card_label": card.label()
+            }
+            
+            # Definir bot_visual para mostrar "CORTOU" no slot
+            self.bot_visual[idx] = {
+                "mode": "cut",
+                "slot": slot,
+                "player_name": p.name,
+                "clear_on": "after_cut"
+            }
+            
+            return  # Processar apenas UM corte por vez
+
+        # Ninguém mais pode cortar - limpar a janela de corte
+        self.pending_bot_cut = False
+        self.cut_window_opened_at = None
+        self._process_pending_discard_flow()
 
     def _check_human_cut_opportunity(self, discarder_idx: int) -> bool:
         if self.players[0].locked:
@@ -1173,7 +1275,10 @@ class WellingtonGame:
                 replace_slot = self.random.choice(unknown_slots)
 
         self.pending_bot_turn = {"player": idx, "replace_slot": replace_slot}
-        self._log(f"{p.name} comprou uma carta.")
+        if replace_slot is not None:
+            self._log(f"{p.name} comprou uma carta e vai substituir slot {replace_slot}.")
+        else:
+            self._log(f"{p.name} comprou uma carta e vai descartá-la.")
 
     # ---------- Helpers ----------
 

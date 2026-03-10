@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Welligton — Jogo de Cartas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════ GAME TABLE ═══════════════ -->
+<div id="game-table">
+
+  <div id="game-logo">WELLIGTON</div>
+  <div id="phase-banner">WELLIGTON!</div>
+
+  <!-- ── TOP ZONE: Bot Topo ── -->
+  <div id="top-zone">
+    <div class="player-area" id="player-top">
+      <div class="player-label">
+        <span>Bot Alfa</span>
+        <span class="score-badge" id="score-top">?</span>
+      </div>
+      <span class="player-status" id="status-top">WELLIGTON LOCKED</span>
+      <div class="card-grid" id="grid-top"></div>
+    </div>
+  </div>
+
+  <!-- ── MIDDLE ZONE ── -->
+  <div id="middle-zone">
+
+    <!-- Left Bot -->
+    <div class="side-bot player-area" id="player-left">
+      <div class="player-label">
+        <span>Bot Beta</span>
+        <span class="score-badge" id="score-left">?</span>
+      </div>
+      <span class="player-status" id="status-left"></span>
+      <div class="card-grid" id="grid-left"></div>
+    </div>
+
+    <!-- Center: Deck + Discard + Drawn Card -->
+    <div id="center-area">
+      <div class="pile-area">
+        <div class="pile-label">Monte</div>
+        <div class="deck-stack" id="deck" role="button" tabindex="0" title="Clique para comprar uma carta" aria-label="Monte — clique para comprar">
+          <div class="deck-card"></div>
+          <div class="deck-card"></div>
+          <div class="deck-card"></div>
+        </div>
+        <div class="deck-count"><span id="deck-count">32</span> cartas</div>
+      </div>
+
+      <div id="turn-indicator">SUA VEZ</div>
+
+      <div class="pile-area">
+        <div class="pile-label">Descarte</div>
+        <div class="discard-area">
+          <div class="card-slot" id="discard-top-slot">
+            <div class="card-inner">
+              <div class="card-face" id="discard-face"></div>
+              <div class="card-back"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="drawn-card-area">
+        <div class="area-label">Em mão</div>
+        <div class="card-slot" id="drawn-card-preview" tabindex="-1" aria-label="Carta em mão — clique para descartar">
+          <div class="card-inner">
+            <div class="card-face" id="drawn-face"></div>
+            <div class="card-back"></div>
+          </div>
+        </div>
+        <div id="drawn-card-hint"></div>
+      </div>
+    </div>
+
+    <!-- Right Bot -->
+    <div class="side-bot player-area" id="player-right">
+      <div class="player-label">
+        <span>Bot Gama</span>
+        <span class="score-badge" id="score-right">?</span>
+      </div>
+      <span class="player-status" id="status-right"></span>
+      <div class="card-grid" id="grid-right"></div>
+    </div>
+
+  </div>
+
+  <!-- ── BOTTOM ZONE: Human Player ── -->
+  <div id="bottom-zone">
+    <div class="player-area human active-turn" id="player-human">
+      <div class="player-label human">
+        <span class="turn-dot"></span>
+        <span>Você</span>
+        <span class="score-badge" id="score-human">?</span>
+      </div>
+      <span class="player-status" id="status-human"></span>
+      <div class="card-grid" id="grid-human"></div>
+    </div>
+
+    <!-- Action Panel: only Welligton button remains -->
+    <div id="action-panel">
+      <div id="action-hint"></div>
+      <button class="btn btn-welligton" id="btn-welligton" title="Declarar WELLIGTON">
+        WELLIGTON
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── CUT COUNTDOWN ─── -->
+<div id="cut-countdown" role="status" aria-live="polite">
+  <div class="cut-title">Janela de Corte</div>
+  <div class="cut-timer" id="cut-timer">3</div>
+  <div class="cut-hint">Clique em uma carta para cortar ou aguarde</div>
+</div>
+
+<!-- ─── ABILITY PANEL ─── -->
+<div id="ability-panel" role="dialog" aria-modal="true" aria-label="Habilidade ativada">
+  <div class="ability-card-badge" id="ability-card-name">J♦</div>
+  <div class="ability-title" id="ability-title">Habilidade Ativada</div>
+  <div class="ability-desc" id="ability-desc">Selecione uma de suas cartas para revelar.</div>
+  <button class="btn btn-ghost" id="btn-ability-cancel" style="margin: 0 auto; display:block;">Cancelar</button>
+</div>
+
+<!-- ─── GAME LOG ─── -->
+<button id="game-log-toggle" title="Log do jogo" aria-label="Abrir log do jogo">&#128203;</button>
+<div id="game-log" role="log" aria-label="Log do jogo">
+  <div class="log-title">Log do Jogo</div>
+  <div id="log-entries"></div>
+</div>
+
+<!-- ─── TOAST ─── -->
+<div id="toast" aria-live="assertive" aria-atomic="true"></div>
+
+<!-- ─── SCRIPT ─── -->
+<script src="script.js"></script>
+
+</body>
+</html>
