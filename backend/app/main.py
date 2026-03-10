@@ -109,6 +109,46 @@ def record_local_event(
         )
         conn.commit()
 
+    # Also fire-and-forget to Supabase in a background thread
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        threading.Thread(
+            target=_record_supabase_event,
+            args=(session_id, player_name, event_type, event_time, user_agent),
+            daemon=True,
+        ).start()
+
+
+def _record_supabase_event(
+    session_id: str,
+    player_name: str,
+    event_type: str,
+    event_time: str,
+    user_agent: str,
+) -> None:
+    payload = {
+        "session_id": session_id,
+        "player_name": player_name,
+        "event_type": event_type,
+        "event_time": event_time,
+        "user_agent": user_agent[:240],
+    }
+    req = urlrequest.Request(
+        f"{SUPABASE_URL}/rest/v1/game_events",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=5):
+            pass
+    except (urlerror.URLError, TimeoutError) as exc:
+        logger.warning("supabase_event_failed event_type=%s reason=%s", event_type, exc)
+
 
 def is_admin_authenticated(request: Request) -> bool:
     token = request.cookies.get(ADMIN_COOKIE_NAME)
@@ -240,13 +280,33 @@ def persist_player_start_event(
     started_at: str,
     user_agent: str,
 ) -> None:
-    record_local_event(
-        session_id=session_id,
-        player_name=player_name,
-        event_type="player_start",
-        event_time=started_at,
-        user_agent=user_agent,
-    )
+    # record_local_event already handles both SQLite + Supabase game_events.
+    # Also keep the legacy player_sessions table in Supabase for backwards compat.
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        def _send_legacy():
+            payload = {
+                "session_id": session_id,
+                "player_name": player_name,
+                "started_at": started_at,
+                "user_agent": user_agent[:240],
+            }
+            req = urlrequest.Request(
+                f"{SUPABASE_URL}/rest/v1/player_sessions",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal",
+                },
+                method="POST",
+            )
+            try:
+                with urlrequest.urlopen(req, timeout=4):
+                    pass
+            except (urlerror.URLError, TimeoutError) as exc:
+                logger.warning("event=player_start_persist_failed reason=%s", exc)
+        threading.Thread(target=_send_legacy, daemon=True).start()
 
     logger.info(
         "event=player_start session_id=%s player_name=%s started_at=%s",
@@ -254,31 +314,6 @@ def persist_player_start_event(
         player_name,
         started_at,
     )
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        return
-
-    payload = {
-        "session_id": session_id,
-        "player_name": player_name,
-        "started_at": started_at,
-        "user_agent": user_agent[:240],
-    }
-    req = urlrequest.Request(
-        f"{SUPABASE_URL}/rest/v1/player_sessions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "apikey": SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal",
-        },
-        method="POST",
-    )
-    try:
-        with urlrequest.urlopen(req, timeout=4):
-            pass
-    except (urlerror.URLError, TimeoutError) as exc:
-        logger.warning("event=player_start_persist_failed reason=%s", exc)
 
 
 @app.get("/api/state")
@@ -304,6 +339,13 @@ def player_start(payload: PlayerStartPayload, request: Request):
             session_id=session_id,
             player_name=normalized_name,
             started_at=session.player_started_at,
+            user_agent=request.headers.get("user-agent", ""),
+        )
+        record_local_event(
+            session_id=session_id,
+            player_name=normalized_name,
+            event_type="player_start",
+            event_time=session.player_started_at,
             user_agent=request.headers.get("user-agent", ""),
         )
         record_local_event(
@@ -475,6 +517,81 @@ def admin_logout(request: Request):
 @app.get("/api/admin/logs")
 def admin_logs_api(request: Request):
     require_admin(request)
+
+    # Prefer Supabase (persistent) when configured; fall back to local SQLite.
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        return _admin_logs_from_supabase()
+
+    return _admin_logs_from_sqlite()
+
+
+def _admin_logs_from_supabase() -> Dict[str, Any]:
+    """Fetch aggregated player stats and recent events from Supabase."""
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Accept": "application/json",
+    }
+
+    def _get(path: str):
+        req = urlrequest.Request(f"{SUPABASE_URL}/rest/v1/{path}", headers=headers)
+        with urlrequest.urlopen(req, timeout=8) as resp:
+            return json.loads(resp.read())
+
+    try:
+        # Recent raw events (newest first, last 200)
+        recent = _get(
+            "game_events"
+            "?select=session_id,player_name,event_type,event_time"
+            "&order=event_time.desc"
+            "&limit=200"
+        )
+
+        # Build per-player summary from the raw events
+        from collections import defaultdict
+        summary: Dict[str, Any] = defaultdict(lambda: {
+            "player_name": "",
+            "first_played_at": None,
+            "last_activity_at": None,
+            "matches_played": 0,
+            "sessions": set(),
+        })
+        all_events = _get(
+            "game_events"
+            "?select=player_name,event_type,event_time,session_id"
+            "&order=event_time.asc"
+        )
+        for row in all_events:
+            pn = row["player_name"]
+            s = summary[pn]
+            s["player_name"] = pn
+            t = row["event_time"]
+            if s["first_played_at"] is None or t < s["first_played_at"]:
+                s["first_played_at"] = t
+            if s["last_activity_at"] is None or t > s["last_activity_at"]:
+                s["last_activity_at"] = t
+            if row["event_type"] == "new_game":
+                s["matches_played"] += 1
+            s["sessions"].add(row["session_id"])
+
+        players = [
+            {
+                "player_name": v["player_name"],
+                "first_played_at": v["first_played_at"],
+                "last_activity_at": v["last_activity_at"],
+                "matches_played": v["matches_played"],
+                "sessions": len(v["sessions"]),
+            }
+            for v in sorted(summary.values(), key=lambda x: x["last_activity_at"] or "", reverse=True)
+        ]
+
+        return {"players": players, "recent_events": recent, "source": "supabase"}
+    except (urlerror.URLError, TimeoutError, Exception) as exc:
+        logger.warning("supabase_logs_fetch_failed reason=%s — falling back to SQLite", exc)
+        return _admin_logs_from_sqlite()
+
+
+def _admin_logs_from_sqlite() -> Dict[str, Any]:
     _init_activity_db()
     with sqlite3.connect(ACTIVITY_DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
@@ -499,10 +616,10 @@ def admin_logs_api(request: Request):
             LIMIT 100
             """
         ).fetchall()
-
     return {
         "players": [dict(row) for row in summary_rows],
         "recent_events": [dict(row) for row in recent_rows],
+        "source": "sqlite",
     }
 
 
