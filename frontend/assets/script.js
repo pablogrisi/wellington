@@ -389,6 +389,7 @@ function onSwapOverlayOk() {
     activeSwapToEl.classList.remove('swap-target', 'swap-confirm');
     activeSwapToEl = null;
   }
+  document.querySelectorAll('.has-swap-highlight').forEach(el => el.classList.remove('has-swap-highlight'));
   isSwapVisualRunning = false;
   render();
 }
@@ -563,8 +564,14 @@ function renderBotSwapAnimation() {
   showSwapOverlay(fromName, fromSlot, toName, toSlot, ability, didSwap);
   showToast(message);
   if (didSwap) {
-    if (fromEl) fromEl.classList.add('swap-origin');
-    if (toEl)   toEl.classList.add('swap-target');
+    if (fromEl) {
+      fromEl.classList.add('swap-origin');
+      fromEl.closest('.player-area')?.classList.add('has-swap-highlight');
+    }
+    if (toEl) {
+      toEl.classList.add('swap-target');
+      toEl.closest('.player-area')?.classList.add('has-swap-highlight');
+    }
     showSwapTracer(fromEl, toEl, HIGHLIGHT_MS + 250);
   }
 

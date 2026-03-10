@@ -1345,6 +1345,19 @@ body {
 }
 .player-area.active-turn .player-label { color: var(--gold-light); }
 
+/* Lift player-area ABOVE the swap overlay when one of its cards is highlighted.
+   Side-bots (#player-left/#player-right) have transform: translateY(-50%) which
+   creates an isolated stacking context — z-index on child card-slots can't escape
+   it. The fix is to raise the *container* itself in the root stacking context. */
+.side-bot.has-swap-highlight {
+  z-index: 9700;
+}
+#player-top.has-swap-highlight,
+#player-human.has-swap-highlight {
+  position: relative;
+  z-index: 9700;
+}
+
 /* ─── Logo ─── */
 #game-logo {
   position: absolute;
