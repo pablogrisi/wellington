@@ -521,6 +521,8 @@ class WellingtonGame:
                 raise ValueError("Seu slot escolhido esta vazio.")
 
             target.cards[transfer_target_slot] = give_card
+            # Bot recebe carta nova que nao viu — apagar conhecimento desse slot.
+            target.known_slots.discard(transfer_target_slot)
             human.cards[give_slot] = None
             human.known_slots.discard(give_slot)
             # O humano ja conhecia a carta enviada, entao o conhecimento acompanha a carta no novo slot.
@@ -551,6 +553,7 @@ class WellingtonGame:
 
         # A carta alvo sempre sai da mesa (acertando ou errando), conforme regra.
         target.cards[target_slot] = None
+        target.known_slots.discard(target_slot)  # carta saiu — bot nao conhece mais esse slot
         self._forget_human_knowledge(target_player, target_slot)
         self.discard_pile.append(target_card)
 
@@ -1040,6 +1043,8 @@ class WellingtonGame:
                 self._forget_human_knowledge(player_idx, own_slot)
             self._log("Habilidade 8: troca aplicada.")
         else:
+            if player_idx != 0:
+                self._emit_bot_swap_visual("8", player_idx, own_slot, target_idx, target_slot)
             self._log("Habilidade 8: troca nao aplicada.")
 
     def _ability_8_preview(self, player_idx: int, own_slot: int, target_idx: int, target_slot: int) -> None:

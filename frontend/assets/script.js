@@ -563,15 +563,17 @@ function renderBotSwapAnimation() {
   // Show overlay — game stays locked until user clicks OK
   showSwapOverlay(fromName, fromSlot, toName, toSlot, ability, didSwap);
   showToast(message);
+  // Always highlight the examined cards so the player can update their mental map,
+  // even when the bot chose NOT to swap (ability 8 no-swap).
+  if (fromEl) {
+    fromEl.classList.add('swap-origin');
+    fromEl.closest('.player-area')?.classList.add('has-swap-highlight');
+  }
+  if (toEl) {
+    toEl.classList.add('swap-target');
+    toEl.closest('.player-area')?.classList.add('has-swap-highlight');
+  }
   if (didSwap) {
-    if (fromEl) {
-      fromEl.classList.add('swap-origin');
-      fromEl.closest('.player-area')?.classList.add('has-swap-highlight');
-    }
-    if (toEl) {
-      toEl.classList.add('swap-target');
-      toEl.closest('.player-area')?.classList.add('has-swap-highlight');
-    }
     showSwapTracer(fromEl, toEl, HIGHLIGHT_MS + 250);
   }
 
@@ -762,6 +764,7 @@ function renderPlayers() {
     
     // Render cards
     let cardsHtml = '';
+    const slotSelectState = []; // selectable state per slot index — applied to DOM after cache check
     player.cards.forEach((cardObj, idx) => {
       let cardToRender = null;
       
@@ -792,7 +795,7 @@ function renderPlayers() {
         return;
       }
 
-      // Determine if selectable
+      // Determine if selectable (stored separately — NOT baked into cardsHtml)
       let selectable = false;
       let selectableDanger = false;
       const isHumanPlayableCard = pos === 'human' && !cardObj.is_empty;
@@ -804,8 +807,10 @@ function renderPlayers() {
       } else if (phase === 'cut-other-transfer' && isHumanPlayableCard) {
         selectableDanger = true;
       }
-      
-      cardsHtml += renderCardSlot(cardToRender, idx, selectable, selectableDanger, playerId);
+      slotSelectState.push({ selectable, selectableDanger });
+
+      // Build HTML without selectable classes so the cache is stable across phase changes
+      cardsHtml += renderCardSlot(cardToRender, idx, false, false, playerId);
     });
 
     let extraBotHtml = '';
@@ -819,18 +824,27 @@ function renderPlayers() {
 
     playerEl.grid.classList.toggle('has-bot-extra', !!extraBotHtml);
 
-    // ── Update card slots only when they actually changed (avoids img flicker) ──
+    // ── Update card slots only when CONTENT changed (avoids img flicker) ──
+    // cardsHtml contains NO selectable classes, so phase changes never trigger innerHTML replacement.
     if (playerCardHtmlCache[pos] !== cardsHtml) {
-      // Detach the animation extra-slot before rebuilding so it isn't clobbered
       const existingExtra = playerEl.grid.querySelector('.card-slot.bot-drawn-extra');
       if (existingExtra) existingExtra.remove();
       playerEl.grid.innerHTML = cardsHtml;
       playerCardHtmlCache[pos] = cardsHtml;
-      // Re-attach preserved extra slot if still needed
       if (existingExtra && extraBotHtml) {
         playerEl.grid.insertBefore(existingExtra, playerEl.grid.firstChild);
       }
     }
+
+    // ── Apply selectable classes in-place (classList.toggle never destroys elements) ──
+    // This is the only place that mutates selectability, keeping click targets stable.
+    playerEl.grid.querySelectorAll('.card-slot[data-slot]:not(.bot-drawn-extra):not(.discard-marker):not(.cut-marker)').forEach(slotEl => {
+      const si = parseInt(slotEl.dataset.slot);
+      if (si >= 0 && si < slotSelectState.length) {
+        slotEl.classList.toggle('selectable', !!slotSelectState[si].selectable);
+        slotEl.classList.toggle('selectable-danger', !!slotSelectState[si].selectableDanger);
+      }
+    });
 
     // ── Manage the animation extra-slot independently (no card rebuild needed) ──
     const curExtraEl = playerEl.grid.querySelector('.card-slot.bot-drawn-extra');
