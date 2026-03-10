@@ -47,6 +47,28 @@ class TestNewGame:
         assert 0 not in human.known_slots
         assert 1 not in human.known_slots
 
+    def test_human_sees_two_cards_before_first_draw(self, game):
+        """Modo memoria: humano ve dois slots iniciais ate a primeira compra."""
+        game.new_game()
+        state = game.public_state()
+        human_cards = state["players"][0]["cards"]
+
+        assert human_cards[2]["known"] is True
+        assert human_cards[3]["known"] is True
+        assert human_cards[0]["known"] is False
+        assert human_cards[1]["known"] is False
+
+    def test_initial_cards_hide_after_first_draw(self, game):
+        """Modo memoria: apos primeira compra, cartas iniciais voltam a ficar ocultas."""
+        game.new_game()
+
+        game.action_draw()
+        state = game.public_state()
+        human_cards = state["players"][0]["cards"]
+
+        assert human_cards[2]["known"] is False
+        assert human_cards[3]["known"] is False
+
     def test_bot_players_know_two_cards(self, game):
         """INIT-03: Bots também conhecem 2 cartas."""
         game.new_game()

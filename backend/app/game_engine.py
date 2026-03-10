@@ -52,6 +52,8 @@ class PlayerState:
 
 
 class WellingtonGame:
+    MEMORY_REVEAL_SECONDS = 4.0
+
     def __init__(self, seed: Optional[int] = None):
         self.random = random.Random(seed)
         self.players: List[PlayerState] = []
@@ -74,7 +76,13 @@ class WellingtonGame:
         self.wellington_waiting_return: bool = False
         self.pending_bot_turn: Optional[Dict[str, Any]] = None
         self.bot_visual: Dict[int, Dict[str, Any]] = {}
+        self.bot_swap_visual: Optional[Dict[str, Any]] = None
+        self.bot_swap_visual_id: int = 0
         self.human_known_other: Dict[tuple[int, int], str] = {}
+        self.human_initial_reveal_slots: set[int] = set()
+        self.human_has_drawn_once: bool = False
+        self.human_temp_known_slots: Dict[int, float] = {}
+        self.human_temp_known_other: Dict[tuple[int, int], Dict[str, Any]] = {}
         self.log: List[str] = []
         self.last_bot_action: Optional[str] = None
         self.cut_window_opened_at: Optional[float] = None
@@ -113,7 +121,13 @@ class WellingtonGame:
         self.wellington_waiting_return = False
         self.pending_bot_turn = None
         self.bot_visual = {}
+        self.bot_swap_visual = None
+        self.bot_swap_visual_id = 0
         self.human_known_other = {}
+        self.human_initial_reveal_slots = {2, 3}
+        self.human_has_drawn_once = False
+        self.human_temp_known_slots = {}
+        self.human_temp_known_other = {}
         self.log = ["Nova partida iniciada."]
         self.last_bot_action = None
 
@@ -147,9 +161,26 @@ class WellingtonGame:
             "wellington_waiting_return": self.wellington_waiting_return,
             "pending_bot_turn": self.pending_bot_turn,
             "bot_visual": self.bot_visual,
+            "bot_swap_visual": self.bot_swap_visual,
+            "bot_swap_visual_id": self.bot_swap_visual_id,
             "human_known_other": [
                 {"player": p, "slot": s, "label": label}
                 for (p, s), label in self.human_known_other.items()
+            ],
+            "human_initial_reveal_slots": sorted(self.human_initial_reveal_slots),
+            "human_has_drawn_once": self.human_has_drawn_once,
+            "human_temp_known_slots": [
+                {"slot": slot, "until": until}
+                for slot, until in self.human_temp_known_slots.items()
+            ],
+            "human_temp_known_other": [
+                {
+                    "player": p,
+                    "slot": s,
+                    "label": str(data.get("label", "")),
+                    "until": float(data.get("until", 0.0)),
+                }
+                for (p, s), data in self.human_temp_known_other.items()
             ],
             "log": self.log,
         }
@@ -194,9 +225,29 @@ class WellingtonGame:
             self.bot_visual = {int(k): v for k, v in raw_bot_visual.items()}
         else:
             self.bot_visual = {}
+        raw_bot_swap_visual = data.get("bot_swap_visual")
+        self.bot_swap_visual = raw_bot_swap_visual if isinstance(raw_bot_swap_visual, dict) else None
+        self.bot_swap_visual_id = int(data.get("bot_swap_visual_id", 0))
         self.human_known_other = {
             (int(item["player"]), int(item["slot"])): str(item.get("label", item.get("rank", "")))
             for item in data.get("human_known_other", [])
+        }
+        self.human_initial_reveal_slots = {
+            int(slot) for slot in data.get("human_initial_reveal_slots", [2, 3])
+        }
+        self.human_has_drawn_once = bool(data.get("human_has_drawn_once", False))
+        self.human_temp_known_slots = {
+            int(item.get("slot", -1)): float(item.get("until", 0.0))
+            for item in data.get("human_temp_known_slots", [])
+            if int(item.get("slot", -1)) >= 0
+        }
+        self.human_temp_known_other = {
+            (int(item.get("player", -1)), int(item.get("slot", -1))): {
+                "label": str(item.get("label", "")),
+                "until": float(item.get("until", 0.0)),
+            }
+            for item in data.get("human_temp_known_other", [])
+            if int(item.get("player", -1)) >= 0 and int(item.get("slot", -1)) >= 0
         }
         self.log = [str(line) for line in data.get("log", [])]
 
@@ -298,6 +349,12 @@ class WellingtonGame:
             raise ValueError("Aguarde a janela de Wellington encerrar.")
         if self.drawn_card is not None:
             raise ValueError("Voce ja comprou uma carta nesta rodada.")
+
+        # Regra do modo memoria: apos a primeira compra, as cartas iniciais deixam de ficar reveladas.
+        if not self.human_has_drawn_once:
+            self.human_has_drawn_once = True
+            self.human_initial_reveal_slots.clear()
+
         self._clear_bot_visual_next_draw()
         self.drawn_card = self._draw_card()
         self.pending_human_cut = False
@@ -622,6 +679,7 @@ class WellingtonGame:
             "pending_ability": ability,
             "pending_ability8_preview": self.pending_ability8_preview,
             "pending_bot_turn": self.pending_bot_turn,
+            "bot_swap_visual": self.bot_swap_visual,
             "last_bot_action": self.last_bot_action,
             "bot_delay_ms": 3000,
             "bot_cut_delay_ms": 2500,
@@ -788,7 +846,9 @@ class WellingtonGame:
         self.current_player = next_idx
         self.drawn_card = None
         self.pending_human_wellington_window = False
-        self.last_bot_action = None
+        # NOTE: last_bot_action is intentionally NOT cleared here so the
+        # frontend can read it in the response for this bot-step call.
+        # It is cleared at the START of the next _bot_turn() instead.
 
         current = self.players[self.current_player]
         current_has_cards = any(c is not None for c in current.cards)
@@ -863,6 +923,7 @@ class WellingtonGame:
             raise ValueError("Slot vazio.")
         player.known_slots.add(slot)
         if player_idx == 0:
+            self._reveal_human_own_slot(slot)
             self._log(f"Habilidade 5: voce viu seu slot {slot} ({card.label()}).")
 
     def _ability_6(self, player_idx: int, target_idx: int, slot: int) -> None:
@@ -879,8 +940,10 @@ class WellingtonGame:
         if player_idx == 0:
             if target_idx == 0:
                 self.players[0].known_slots.add(slot)
+                self._reveal_human_own_slot(slot)
             else:
                 self.human_known_other[(target_idx, slot)] = card.label()
+                self._reveal_human_other_slot(target_idx, slot, card.label())
             self._log(f"Habilidade 6: voce viu {card.label()} do jogador {target_idx}, slot {slot}.")
         else:
             if target_idx == player_idx:
@@ -904,6 +967,9 @@ class WellingtonGame:
         human_knows_sent_card = player_idx == 0 and own_slot in self.players[0].known_slots
 
         own.cards[own_slot], target.cards[target_slot] = c2, c1
+
+        if player_idx != 0:
+            self._emit_bot_swap_visual("7", player_idx, own_slot, target_idx, target_slot)
 
         if player_idx == 0:
             self.players[0].known_slots.discard(own_slot)
@@ -937,6 +1003,8 @@ class WellingtonGame:
         if player_idx == 0:
             self.players[0].known_slots.add(own_slot)
             self.human_known_other[(target_idx, target_slot)] = c2.label()
+            self._reveal_human_own_slot(own_slot)
+            self._reveal_human_other_slot(target_idx, target_slot, c2.label())
             self._log(
                 f"Habilidade 8: voce viu {c1.label()} (seu slot {own_slot}) e {c2.label()} do jogador {target_idx} slot {target_slot}."
             )
@@ -945,11 +1013,17 @@ class WellingtonGame:
 
         if do_swap:
             own.cards[own_slot], target.cards[target_slot] = c2, c1
+
+            if player_idx != 0:
+                self._emit_bot_swap_visual("8", player_idx, own_slot, target_idx, target_slot)
+
             if player_idx == 0:
                 # Continua conhecido: apos a troca, o jogador tambem viu c2.
                 self.players[0].known_slots.add(own_slot)
                 # Continua conhecido no alvo: apos a troca, o slot alvo passa a conter c1, que foi visto.
                 self.human_known_other[(target_idx, target_slot)] = c1.label()
+                self._reveal_human_own_slot(own_slot)
+                self._reveal_human_other_slot(target_idx, target_slot, c1.label())
             else:
                 own.known_slots.add(own_slot)
                 if target_idx != 0:
@@ -984,6 +1058,8 @@ class WellingtonGame:
         if player_idx == 0:
             self.players[0].known_slots.add(own_slot)
             self.human_known_other[(target_idx, target_slot)] = c2.label()
+            self._reveal_human_own_slot(own_slot)
+            self._reveal_human_other_slot(target_idx, target_slot, c2.label())
         self._log(
             f"Habilidade 8: cartas reveladas para decisao (seu slot {own_slot} e jogador {target_idx} slot {target_slot})."
         )
@@ -1027,6 +1103,7 @@ class WellingtonGame:
             self._ability_7(player_idx, own_slot, t, target_slot)
             target_name = "você" if t == 0 else self.players[t].name
             self.last_bot_action = f"{player.name} jogou um 7 e trocou cartas com {target_name}."
+            self._log(f"{player.name} usou habilidade 7 no slot {own_slot} contra jogador {t} slot {target_slot}.")
             return
         if rank == "8":
             candidates = [i for i in range(len(self.players)) if i != player_idx and not self.players[i].locked]
@@ -1045,6 +1122,8 @@ class WellingtonGame:
             target_name = "você" if t == 0 else self.players[t].name
             action_text = "trocou cartas com" if do_swap else "comparou cartas com"
             self.last_bot_action = f"{player.name} jogou um 8 e {action_text} {target_name}."
+            swap_text = "trocou" if do_swap else "nao trocou"
+            self._log(f"{player.name} usou habilidade 8 no slot {own_slot} contra jogador {t} slot {target_slot} ({swap_text}).")
             return
 
     # ---------- Cuts ----------
@@ -1183,6 +1262,8 @@ class WellingtonGame:
     # ---------- Bot turn ----------
 
     def _bot_turn(self, idx: int) -> None:
+        # Clear previous bot's action text now that a new bot turn is starting.
+        self.last_bot_action = None
         p = self.players[idx]
         if p.locked:
             self._advance_turn()
@@ -1282,7 +1363,27 @@ class WellingtonGame:
 
     # ---------- Helpers ----------
 
+    def _emit_bot_swap_visual(
+        self,
+        ability_rank: str,
+        from_player: int,
+        from_slot: int,
+        to_player: int,
+        to_slot: int,
+    ) -> None:
+        self.bot_swap_visual_id += 1
+        self.bot_swap_visual = {
+            "id": self.bot_swap_visual_id,
+            "ability": ability_rank,
+            "from_player": from_player,
+            "from_slot": from_slot,
+            "to_player": to_player,
+            "to_slot": to_slot,
+        }
+
     def _human_view_card(self, player_idx: int, slot: int, card: Optional[Card]) -> tuple[bool, str]:
+        self._cleanup_human_temp_memory()
+
         if card is None:
             return True, "--"
         if self.game_over:
@@ -1296,14 +1397,48 @@ class WellingtonGame:
                 return True, preview["target_label"]
 
         if player_idx == 0:
-            if slot in self.players[0].known_slots:
+            if not self.human_has_drawn_once and slot in self.human_initial_reveal_slots:
+                return True, card.label()
+
+            until = self.human_temp_known_slots.get(slot)
+            if until is not None and time.time() <= until:
                 return True, card.label()
             return False, "??"
 
-        known_label = self.human_known_other.get((player_idx, slot))
-        if known_label is not None:
-            return True, known_label
+        temp_known = self.human_temp_known_other.get((player_idx, slot))
+        if temp_known is not None and time.time() <= float(temp_known.get("until", 0.0)):
+            expected_label = str(temp_known.get("label", ""))
+            if card.label() == expected_label:
+                return True, expected_label
         return False, "??"
+
+    def _reveal_human_own_slot(self, slot: int, duration_s: float = MEMORY_REVEAL_SECONDS) -> None:
+        self.human_temp_known_slots[slot] = time.time() + duration_s
+
+    def _reveal_human_other_slot(
+        self,
+        player_idx: int,
+        slot: int,
+        label: str,
+        duration_s: float = MEMORY_REVEAL_SECONDS,
+    ) -> None:
+        self.human_temp_known_other[(player_idx, slot)] = {
+            "label": label,
+            "until": time.time() + duration_s,
+        }
+
+    def _cleanup_human_temp_memory(self) -> None:
+        now = time.time()
+        self.human_temp_known_slots = {
+            slot: until
+            for slot, until in self.human_temp_known_slots.items()
+            if now <= until
+        }
+        self.human_temp_known_other = {
+            key: data
+            for key, data in self.human_temp_known_other.items()
+            if now <= float(data.get("until", 0.0))
+        }
 
     def _validate_slot(self, player: PlayerState, slot: int) -> None:
         if slot < 0 or slot >= len(player.cards):

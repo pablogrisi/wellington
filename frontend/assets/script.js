@@ -27,12 +27,24 @@ const BOT_TURN_DELAY_MS = 220;
 const BOT_CONTINUE_DELAY_MS = 380;
 const BOT_VISUAL_DELAY_MS = 450;
 const BOT_CUT_VISUAL_MS = 700;
+const BOT_SWAP_STAGE_MS = 1200;   // highlight phase: player sees which cards will swap
+const BOT_SWAP_TRAVEL_MS = 1600;  // ghosts cross the screen
+const BOT_SWAP_CONFIRM_MS = 1400; // gold-glow confirm phase
 
 // Cut countdown timer
 let cutCountdown = 3;
 
 // Ability state tracking
 let abilitySelection = { own_slot: null, target_player: null, target_slot: null };
+let lastBotSwapVisualId = null;
+let lastBotSwapFallbackEventKey = '';
+let previousLogEntries = [];
+const pendingSwapVisualEvents = [];
+let isSwapVisualRunning = false;
+let uiLockedUntil = 0;
+let activeSwapFromEl = null;
+let activeSwapToEl = null;
+let swapHighlightTimer = null;
 
 // ─── DOM Elements ───
 const els = {
@@ -181,6 +193,7 @@ let renderTimeout = null;
 
 async function loadState() {
   state = await request("/api/state");
+  enqueueSwapVisualEventsFromState();
   render();
 }
 
@@ -190,6 +203,7 @@ async function action(path, payload = null) {
       method: "POST",
       body: payload ? JSON.stringify(payload) : undefined,
     });
+    enqueueSwapVisualEventsFromState();
     render();
   } catch (err) {
     showToast(err.message);
@@ -199,12 +213,21 @@ async function action(path, payload = null) {
 // ─── Rendering Functions ───
 function render() {
   if (!state) return;
-  
+
+  // Don't rebuild the DOM while a swap animation is in flight — the animation
+  // holds live references to card-slot elements that would become stale.
+  if (isUiLocked()) {
+    if (renderTimeout) clearTimeout(renderTimeout);
+    const waitMs = isSwapVisualRunning ? 500 : Math.max(80, uiLockedUntil - Date.now() + 60);
+    renderTimeout = setTimeout(render, waitMs);
+    return;
+  }
+
   // Debounce rapid renders
   if (renderTimeout) {
     clearTimeout(renderTimeout);
   }
-  
+
   renderTimeout = setTimeout(() => {
     doRender();
     renderTimeout = null;
@@ -217,6 +240,7 @@ function doRender() {
   syncUiStateWithGame();
   renderPlayerGate();
   renderPlayers();
+  renderBotSwapAnimation();
   renderDeck();
   renderDiscard();
   renderDrawnCard();
@@ -236,6 +260,14 @@ function doRender() {
   scheduleCutAutoPass();
   scheduleWellingtonWindowAutoPass();
   scheduleBotStep();
+}
+
+function isUiLocked() {
+  return Date.now() < uiLockedUntil || isSwapVisualRunning;
+}
+
+function lockUiFor(ms) {
+  uiLockedUntil = Math.max(uiLockedUntil, Date.now() + ms);
 }
 
 function syncUiStateWithGame() {
@@ -289,16 +321,262 @@ function renderCardImage(card) {
 }
 
 // Render a card slot - card can be {rank, suit} or null
-function renderCardSlot(card, index, isSelectable = false, isSelectableDanger = false) {
+function renderCardSlot(card, index, isSelectable = false, isSelectableDanger = false, playerId = null) {
   let classes = 'card-slot';
   
   if (!card) classes += ' empty';
   if (isSelectable) classes += ' selectable';
   if (isSelectableDanger) classes += ' selectable-danger';
   
-  return `<div class="${classes}" data-slot="${index}">
+  const playerAttr = Number.isInteger(playerId) ? `data-player-id="${playerId}"` : '';
+  return `<div class="${classes}" data-slot="${index}" ${playerAttr}>
     ${renderCardImage(card)}
   </div>`;
+}
+
+function getPlayerGridId(playerId) {
+  if (playerId === 0) return 'grid-human';
+  if (playerId === 1) return 'grid-left';
+  if (playerId === 2) return 'grid-top';
+  if (playerId === 3) return 'grid-right';
+  return null;
+}
+
+function getSlotElement(playerId, slot) {
+  const gridId = getPlayerGridId(playerId);
+  if (!gridId) return null;
+  const candidates = document.querySelectorAll(`#${gridId} .card-slot[data-slot="${slot}"]`);
+  for (const el of candidates) {
+    if (!el.classList.contains('discard-marker') && !el.classList.contains('cut-marker')) {
+      return el;
+    }
+  }
+  return candidates[0] || null;
+}
+
+// ---------- Swap overlay (replaces unreliable ghost-card approach) ----------
+
+function showSwapOverlay(fromName, fromSlot, toName, toSlot, abilityRank, didSwap = true) {
+  const abilityLabel = abilityRank === '8' ? 'Carta 8' : 'Carta 7';
+  const el = document.getElementById('swap-notif');
+  if (!el) return;
+  el.classList.remove('ability-7', 'ability-8');
+  el.classList.add(abilityRank === '8' ? 'ability-8' : 'ability-7');
+  el.innerHTML = `
+    <div class="swap-notif-icon">🔄</div>
+    <div class="swap-notif-title">${abilityLabel} — Troca de cartas!</div>
+    <div class="swap-notif-hint">Atualize seu mapa mental!</div>
+    <button class="swap-notif-ok" onclick="onSwapOverlayOk()">OK, entendi</button>
+  `;
+  el.classList.add('show');
+}
+
+function hideSwapOverlay() {
+  const el = document.getElementById('swap-notif');
+  if (el) {
+    el.classList.remove('show', 'ability-7', 'ability-8');
+  }
+}
+
+function onSwapOverlayOk() {
+  clearTimeout(swapHighlightTimer);
+  hideSwapOverlay();
+  if (activeSwapFromEl) {
+    activeSwapFromEl.classList.remove('swap-origin', 'swap-confirm');
+    activeSwapFromEl = null;
+  }
+  if (activeSwapToEl) {
+    activeSwapToEl.classList.remove('swap-target', 'swap-confirm');
+    activeSwapToEl = null;
+  }
+  isSwapVisualRunning = false;
+  render();
+}
+
+function showSwapTracer(fromEl, toEl, totalMs) {
+  if (!fromEl || !toEl) return;
+  const tracer = document.createElement('div');
+  tracer.className = 'swap-tracer';
+
+  const a = fromEl.getBoundingClientRect();
+  const b = toEl.getBoundingClientRect();
+
+  const x1 = a.left + a.width / 2;
+  const y1 = a.top + a.height / 2;
+  const x2 = b.left + b.width / 2;
+  const y2 = b.top + b.height / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+  tracer.style.left = `${x1}px`;
+  tracer.style.top = `${y1}px`;
+  tracer.style.width = `${Math.max(24, len)}px`;
+  tracer.style.transform = `rotate(${angle}deg)`;
+
+  document.body.appendChild(tracer);
+
+  setTimeout(() => {
+    tracer.remove();
+  }, totalMs);
+}
+
+function getNewLogEntries(prev, curr) {
+  if (!Array.isArray(curr) || curr.length === 0) return [];
+  if (!Array.isArray(prev) || prev.length === 0) return [];
+
+  const maxOverlap = Math.min(prev.length, curr.length);
+  let overlap = 0;
+  for (let k = maxOverlap; k >= 1; k -= 1) {
+    let ok = true;
+    for (let i = 0; i < k; i += 1) {
+      if (prev[prev.length - k + i] !== curr[i]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      overlap = k;
+      break;
+    }
+  }
+  return curr.slice(overlap);
+}
+
+function enqueueSwapEvent(event) {
+  if (!event) return;
+  console.log('[SWAP] enqueueSwapEvent: ability=' + event.ability + ' from=' + event.fromPlayer + ' to=' + event.toPlayer + ' queueSize=' + (pendingSwapVisualEvents.length + 1));
+  pendingSwapVisualEvents.push({
+    fromPlayer: Number.isInteger(event.fromPlayer) ? event.fromPlayer : -1,
+    toPlayer: Number.isInteger(event.toPlayer) ? event.toPlayer : -1,
+    fromSlot: Number.isInteger(event.fromSlot) ? event.fromSlot : -1,
+    toSlot: Number.isInteger(event.toSlot) ? event.toSlot : -1,
+    ability: String(event.ability || '?'),
+    didSwap: event.didSwap !== false,
+    fromName: event.fromName || null,
+    toName: event.toName || null,
+  });
+}
+
+function enqueueSwapVisualEventsFromState() {
+  const currentLog = Array.isArray(state?.log) ? state.log.slice() : [];
+  const actionText = String(state?.last_bot_action || '');
+  const fallbackKey = `${actionText}|${currentLog.join('\n')}`;
+
+  // Source 1: structured bot_swap_visual (highest priority — blocks other sources)
+  const visual = state?.bot_swap_visual;
+  if (visual && Number.isInteger(visual.id) && visual.id !== lastBotSwapVisualId) {
+    lastBotSwapVisualId = visual.id;
+    lastBotSwapFallbackEventKey = fallbackKey; // block log-delta and legacy for same event
+    previousLogEntries = currentLog;
+    enqueueSwapEvent({
+      fromPlayer: Number(visual.from_player),
+      toPlayer: Number(visual.to_player),
+      fromSlot: Number(visual.from_slot),
+      toSlot: Number(visual.to_slot),
+      ability: String(visual.ability || '?'),
+      didSwap: true,
+    });
+    return;
+  }
+
+  // Source 2: structured log delta
+  const added = previousLogEntries.length > 0
+    ? getNewLogEntries(previousLogEntries, currentLog)
+    : [];
+  previousLogEntries = currentLog;
+
+  let firedFromLog = false;
+  for (const entry of added) {
+    const m7 = String(entry).match(/^(.*?) usou habilidade 7 no slot (\d+) contra jogador (\d+) slot (\d+)\.$/i);
+    if (m7) {
+      const actorIdx = (state?.players || []).findIndex(p => p?.name === m7[1]);
+      enqueueSwapEvent({ fromPlayer: actorIdx, toPlayer: Number(m7[3]), fromSlot: Number(m7[2]), toSlot: Number(m7[4]), ability: '7', didSwap: true });
+      firedFromLog = true;
+      continue;
+    }
+    const m8 = String(entry).match(/^(.*?) usou habilidade 8 no slot (\d+) contra jogador (\d+) slot (\d+) \((trocou|nao trocou)\)\.$/i);
+    if (m8) {
+      const actorIdx = (state?.players || []).findIndex(p => p?.name === m8[1]);
+      enqueueSwapEvent({ fromPlayer: actorIdx, toPlayer: Number(m8[3]), fromSlot: Number(m8[2]), toSlot: Number(m8[4]), ability: '8', didSwap: m8[5].toLowerCase() === 'trocou' });
+      firedFromLog = true;
+    }
+  }
+
+  // Source 3: legacy last_bot_action fallback (only when log didn't fire)
+  if (!firedFromLog) {
+    const mLegacy = actionText.match(/^(.*?) jogou um (7|8) e (trocou cartas com|comparou cartas com) (.*?)\./i);
+    if (mLegacy && fallbackKey !== lastBotSwapFallbackEventKey) {
+      lastBotSwapFallbackEventKey = fallbackKey;
+      enqueueSwapEvent({ fromName: mLegacy[1], toName: mLegacy[4], fromSlot: -1, toSlot: -1, ability: mLegacy[2], didSwap: mLegacy[3].toLowerCase().includes('trocou') });
+    }
+  } else {
+    lastBotSwapFallbackEventKey = fallbackKey; // block legacy for same event
+  }
+}
+
+function renderBotSwapAnimation() {
+  if (isSwapVisualRunning) return;
+
+  const event = pendingSwapVisualEvents.shift();
+  if (!event) return;
+  isSwapVisualRunning = true;
+
+  // Kill any active cut countdown — must not fire while overlay is showing
+  if (cutTimerInterval) {
+    clearInterval(cutTimerInterval);
+    cutTimerInterval = null;
+    cutCountdown = 3;
+  }
+
+  const fromPlayer = event.fromPlayer;
+  const toPlayer = event.toPlayer;
+  const fromSlot = event.fromSlot;
+  const toSlot = event.toSlot;
+  const ability = event.ability;
+  const didSwap = event.didSwap !== false;
+
+  const fromEl = getSlotElement(fromPlayer, fromSlot);
+  const toEl = getSlotElement(toPlayer, toSlot);
+
+  // Store for cleanup by OK button click
+  activeSwapFromEl = fromEl;
+  activeSwapToEl = toEl;
+
+  const fromName = event.fromName || (Number.isInteger(fromPlayer) && fromPlayer >= 0
+    ? (state.players[fromPlayer]?.name || `Jogador ${fromPlayer}`)
+    : 'Bot');
+  const toName = event.toName || (Number.isInteger(toPlayer) && toPlayer >= 0
+    ? (state.players[toPlayer]?.name || `Jogador ${toPlayer}`)
+    : 'alvo');
+
+  const fromSlotText = fromSlot >= 0 ? String(fromSlot + 1) : '?';
+  const toSlotText = toSlot >= 0 ? String(toSlot + 1) : '?';
+  const message = didSwap
+    ? `Troca ${ability}: ${fromName} (${fromSlotText}) ↔ ${toName} (${toSlotText})`
+    : `Carta 8: ${fromName} comparou cartas com ${toName} (NAO TROCOU)`;
+
+  const HIGHLIGHT_MS = 2600;
+
+  // Show overlay — game stays locked until user clicks OK
+  showSwapOverlay(fromName, fromSlot, toName, toSlot, ability, didSwap);
+  showToast(message);
+  if (didSwap) {
+    if (fromEl) fromEl.classList.add('swap-origin');
+    if (toEl)   toEl.classList.add('swap-target');
+    showSwapTracer(fromEl, toEl, HIGHLIGHT_MS + 250);
+  }
+
+  // Auto-switch to gold glow after highlight phase (visual progress cue)
+  clearTimeout(swapHighlightTimer);
+  swapHighlightTimer = setTimeout(() => {
+    if (didSwap) {
+      if (fromEl) { fromEl.classList.remove('swap-origin'); fromEl.classList.add('swap-confirm'); }
+      if (toEl)   { toEl.classList.remove('swap-target');   toEl.classList.add('swap-confirm'); }
+    }
+  }, HIGHLIGHT_MS);
+  // Dismiss only when user clicks OK (see onSwapOverlayOk)
 }
 
 function renderDiscardMarkerSlot(index = -1, extraClass = '') {
@@ -510,16 +788,17 @@ function renderPlayers() {
       // Determine if selectable
       let selectable = false;
       let selectableDanger = false;
+      const isHumanPlayableCard = pos === 'human' && !cardObj.is_empty;
       
-      if (phase === 'replace' && pos === 'human' && cardObj.known) {
+      if (phase === 'replace' && isHumanPlayableCard) {
         selectable = true;
-      } else if (phase === 'cut-self' && pos === 'human' && cardObj.known) {
+      } else if (phase === 'cut-self' && isHumanPlayableCard) {
         selectable = true;
-      } else if (phase === 'cut-other-transfer' && pos === 'human' && cardObj.known) {
+      } else if (phase === 'cut-other-transfer' && isHumanPlayableCard) {
         selectableDanger = true;
       }
       
-      cardsHtml += renderCardSlot(cardToRender, idx, selectable, selectableDanger);
+      cardsHtml += renderCardSlot(cardToRender, idx, selectable, selectableDanger, playerId);
     });
 
     let extraBotHtml = '';
@@ -783,6 +1062,15 @@ let cutTimerInterval = null;
 
 function renderCutCountdown() {
   if (state.pending_human_cut) {
+    // Don't start or continue cut countdown while swap overlay is showing
+    if (isSwapVisualRunning) {
+      if (cutTimerInterval) {
+        clearInterval(cutTimerInterval);
+        cutTimerInterval = null;
+        cutCountdown = 3;
+      }
+      return;
+    }
     // Start countdown if not running
     if (!cutTimerInterval) {
       cutCountdown = 3;
@@ -894,6 +1182,7 @@ function showToast(message) {
 // Deck click
 if (els.deck) {
   els.deck.addEventListener('click', () => {
+    if (isUiLocked()) return;
     if (state.actions?.can_draw && phase === null) {
       action('/api/action/draw');
     }
@@ -903,6 +1192,7 @@ if (els.deck) {
 // Drawn card click
 if (els.drawnPreview) {
   els.drawnPreview.addEventListener('click', () => {
+    if (isUiLocked()) return;
     if (phase === 'replace') {
       action('/api/action/discard-drawn');
     }
@@ -911,6 +1201,7 @@ if (els.drawnPreview) {
 
 // Card slot clicks (delegation)
 document.addEventListener('click', (e) => {
+  if (isUiLocked()) return;
   const slot = e.target.closest('.card-slot');
   if (!slot) return;
   
@@ -1149,7 +1440,15 @@ function scheduleBotStep() {
   clearTimeout(botStepTimer);
 
   if (!state.player_ready || state.game_over || state.paused) return;
-  
+
+  // Don't advance the game while a swap animation is playing — we need the
+  // current DOM to stay intact until the animation finishes.
+  if (isUiLocked()) {
+    const waitMs = isSwapVisualRunning ? 500 : Math.max(80, uiLockedUntil - Date.now() + 80);
+    botStepTimer = setTimeout(scheduleBotStep, waitMs);
+    return;
+  }
+
   // When cut window is open, keep one stable wake-up timer instead of resetting it every render.
   if (state.pending_bot_cut && !state.actions?.can_bot_step) {
     if (!botCutReadyAt) {
